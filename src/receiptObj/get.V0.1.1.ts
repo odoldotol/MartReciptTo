@@ -278,7 +278,7 @@ export = function(annotateResult: {textAnnotations, fullTextAnnotationPlusStudy,
     if (permits.items) {
         receipt.complete();
     };
-    
+
     // console.log('receipt', receipt);
     return {receipt, failures, permits};
 };

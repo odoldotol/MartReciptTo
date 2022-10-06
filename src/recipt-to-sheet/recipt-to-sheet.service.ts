@@ -138,20 +138,20 @@ export class ReciptToSheetService {
     /**
      * 
      */
-    async sendGoogleVisionAnnotateResultToLabs(reciptImage: Express.Multer.File, multipartBody: MultipartBodyDto) {
+    // async sendGoogleVisionAnnotateResultToLabs(reciptImage: Express.Multer.File, multipartBody: MultipartBodyDto) {
         
-        const {receiptStyle, labsReceiptNumber} = multipartBody;
-        if (!receiptStyle || !labsReceiptNumber) {
-            throw new BadRequestException('receiptStyle or labsReceiptNumber is not available')
-        }
-        const annotateResult = await this.annotateImage(reciptImage);
+    //     const {receiptStyle, labsReceiptNumber} = multipartBody;
+    //     if (!receiptStyle || !labsReceiptNumber) {
+    //         throw new BadRequestException('receiptStyle or labsReceiptNumber is not available')
+    //     }
+    //     const annotateResult = await this.annotateImage(reciptImage);
 
-        let data = "export = " + JSON.stringify(annotateResult, null, 4);
-        writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}.ts`, data, () => { console.log("WRITED: an annotateResult file"); });
+    //     let data = "export = " + JSON.stringify(annotateResult, null, 4);
+    //     writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}.ts`, data, () => { console.log("WRITED: an annotateResult file"); });
 
-        data = "export = " + JSON.stringify(multipartBody, null, 4);
-        writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}-body.ts`, data, () => { console.log("WRITED: a multipartBody file"); });
-    };
+    //     data = "export = " + JSON.stringify(multipartBody, null, 4);
+    //     writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}-body.ts`, data, () => { console.log("WRITED: a multipartBody file"); });
+    // };
 
     /**
      * 
