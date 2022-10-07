@@ -17,6 +17,7 @@ import { Receipt as ReceiptSchemaClass, ReceiptDocument } from './schemas/receip
 import { Annotate_response, Annotate_responseDocument } from './schemas/annotate_response.schema';
 import { Read_failure, Read_failureDocument } from './schemas/read_failure.schema';
 import convert from 'heic-convert';
+import uriPathConverter from '../util/uriPathConverter';
 
 @Injectable()
 export class ReciptToSheetService {
@@ -394,5 +395,29 @@ export class ReciptToSheetService {
      */
     deleteImageInGCS(filename) {
         return this.googleCloudStorage.bucket(this.bucketName).file(filename).delete()
-    }
+    };
+
+    /**
+     * 이미지uri 로 데이터베이스를 뒤져서 annoRes 와 요청 body(복원된) 를 파일로 저장한다.
+     */
+    async writeAnnoResByImageUri(body: {imageUri: string}) {
+        const imageUri = body.imageUri
+
+        const {provider, providerInput, annotate_responseId, outputRequests} = await this.receiptModel.findOne({imageAddress: imageUri}, 'provider providerInput annotate_responseId outputRequests').exec()
+        const {response: annoRes} = await this.annotateResponseModel.findById(annotate_responseId, 'response').exec()
+        
+        const reqBody = {
+            emailAddress: provider.emailAddress,
+            sheetFormat: outputRequests[0].sheetFormat,
+            receiptStyle: providerInput.receiptStyle
+        }
+
+        const imageUriFilePath = uriPathConverter.toPath(imageUri)
+
+        let data = "export = " + JSON.stringify(annoRes, null, 4);
+        writeFile(`src/googleVisionAnnoLab/annotateResult/${reqBody.receiptStyle}/${imageUriFilePath}.ts`, data, () => { console.log("WRITED: an annotateResult file"); });
+
+        data = "export = " + JSON.stringify(reqBody, null, 4);
+        writeFile(`src/googleVisionAnnoLab/annotateResult/${reqBody.receiptStyle}/${imageUriFilePath}-body.ts`, data, () => { console.log("WRITED: a multipartBody file"); });
+    };
 };
