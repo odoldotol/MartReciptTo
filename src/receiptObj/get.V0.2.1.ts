@@ -1,4 +1,4 @@
-// version 0.1.1
+// version 0.2.1
 
 // 구굴 비젼 API 의 "TEXT_DETECTION", "DOCUMENT_TEXT_DETECTION" 기능을 포함한 annotateResult: [google.cloud.vision.v1.IAnnotateImageResponse] 로부터 데이터를 얻습니다.
 // 인자 annotateResult 는 googleVisionAnnoPipe/inspector.V0.0.1 를 통해 검증되어야 합니다.
@@ -7,7 +7,9 @@
 // 영수증의 구조분석과 요소간 상대적 위치를 기준으로 텍스트요소들을 찾아내는 솔루션입니다.
 // 홈플러스 단일 술루션입니다.
 
-// get.V0.0.1 에서 출발했습니다.
+// get.V0.1.1 에서 출발했습니다.
+// items 의 각 칼럼별들을 독립적으로 찾고 순차적으로 찾으면서 구역을 더 정확히 찾아낼 수 있도록 개선하였습니다.
+
 /** 
  * 테스트영수증 커버리지
  * 
