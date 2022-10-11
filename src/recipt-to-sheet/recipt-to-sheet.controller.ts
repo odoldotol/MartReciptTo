@@ -37,4 +37,10 @@ export class ReciptToSheetController {
     async writeAnnoResByImageUri(@Body() body) {
         return this.reciptToSheetService.writeAnnoResByImageUri(body);
     };
+
+    // 추후 body 에 필터 넘겨주는것 적용하기, 지금은 전부 다시읽음
+    @Post('updater')
+    async reReadAnnoResAndUpdateDB() {
+        return this.reciptToSheetService.reReadAnnoResAndUpdateDB();
+    };
 };

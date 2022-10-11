@@ -49,7 +49,7 @@ export class ReciptToSheetService {
     }
 
     /**
-     * 
+     * FE
      */
     async processingReceiptImage(reciptImage: Express.Multer.File) { 
         // heic 형식일 경우 jpeg 로 변환 // 폰에서는 자동변환되는것같다?
@@ -79,7 +79,7 @@ export class ReciptToSheetService {
     };
 
     /**
-     * 
+     * BE Main
      */
     async processingAnnoRes(annoRes, imageUri: string, multipartBody: MultipartBodyDto, requestDate: Date) {
 
@@ -137,22 +137,30 @@ export class ReciptToSheetService {
     };
 
     /**
+     * 이용중지
+     */
+    // async sendGoogleVisionAnnotateResultToLabs(reciptImage: Express.Multer.File, multipartBody: MultipartBodyDto) {
+        
+    //     const {receiptStyle, labsReceiptNumber} = multipartBody;
+    //     if (!receiptStyle || !labsReceiptNumber) {
+    //         throw new BadRequestException('receiptStyle or labsReceiptNumber is not available')
+    //     }
+    //     const annotateResult = await this.annotateImage(reciptImage);
+
+    //     let data = "export = " + JSON.stringify(annotateResult, null, 4);
+    //     writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}.ts`, data, () => { console.log("WRITED: an annotateResult file"); });
+
+    //     data = "export = " + JSON.stringify(multipartBody, null, 4);
+    //     writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}-body.ts`, data, () => { console.log("WRITED: a multipartBody file"); });
+    // };
+
+    /**
+     * #### 새로운 GET 버젼에 맞게 전체 데이터베이스 업데이트
+     * (전부 다 읽기) (로컬에서 새로운 get 버젼이 모든 데이터에 대해서 문제가 없는것을 확인 후에 실행할 것)
      * 
      */
-    async sendGoogleVisionAnnotateResultToLabs(reciptImage: Express.Multer.File, multipartBody: MultipartBodyDto) {
-        
-        const {receiptStyle, labsReceiptNumber} = multipartBody;
-        if (!receiptStyle || !labsReceiptNumber) {
-            throw new BadRequestException('receiptStyle or labsReceiptNumber is not available')
-        }
-        const annotateResult = await this.annotateImage(reciptImage);
+    reReadAnnoResAndUpdateDB() {};
 
-        let data = "export = " + JSON.stringify(annotateResult, null, 4);
-        writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}.ts`, data, () => { console.log("WRITED: an annotateResult file"); });
-
-        data = "export = " + JSON.stringify(multipartBody, null, 4);
-        writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}-body.ts`, data, () => { console.log("WRITED: a multipartBody file"); });
-    };
 
     /**
      * 
