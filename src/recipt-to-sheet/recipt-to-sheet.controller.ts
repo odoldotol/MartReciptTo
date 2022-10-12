@@ -9,8 +9,11 @@ export class ReciptToSheetController {
     constructor(
         private readonly configService: ConfigService,
         private readonly reciptToSheetService: ReciptToSheetService
-    ) {}
+    ) {};
     
+    /**
+     * #### 메인
+     */
     @Post()
     @UseInterceptors(FileInterceptor('receiptImage'/*, {options} */))
     async processingTransferredReceipt(@UploadedFile() reciptImage: Express.Multer.File, @Body() multipartBody: MultipartBodyDto) { // 지금은 단일 이미지만 처리한다. 추후에는 여러 영수증이미지를 받아서 처리할 수 있도록 하자.
@@ -27,18 +30,39 @@ export class ReciptToSheetController {
         return this.reciptToSheetService.processingAnnoRes(annoRes, imageUri, multipartBody, requestDate); // imageUri 는 나중에 body 로 들어온다
     };
 
+
+    // lab module 분리하기?
+
+    /**
+     * 더이상 사용하지 않음
+     */
     // @Post('lab')
     // @UseInterceptors(FileInterceptor('receiptImage'/*, {options} */))
     // sendGoogleVisionAnnotateResultToLabs(@UploadedFile() reciptImage: Express.Multer.File, @Body() multipartBody: MultipartBodyDto) {
     //     return this.reciptToSheetService.sendGoogleVisionAnnotateResultToLabs(reciptImage, multipartBody);
     // };
 
+    /**
+     * #### 작업할 annoRes 를 로컬 LAB 으로 가져오기
+     */
     @Post('lab/write-annores')
     async writeAnnoResByImageUri(@Body() body) {
         return this.reciptToSheetService.writeAnnoResByImageUri(body);
     };
 
-    // 추후 body 에 필터 넘겨주는것 적용하기, 지금은 전부 다시읽음
+    /**
+     * #### EXPECTED 생성
+     * - 추후에 필터를 줘서 다운로드할 수 있도록 개선하자.
+     */
+    @Post('lab/download-receipts-to-expected')
+    async downloadReceiptsToExpected() {
+        return this.reciptToSheetService.downloadReceiptsToExpected();
+    };
+
+    /**
+     * #### 업데이터
+     * - 추후에 필터를 줘서 업데이트할 수 있도록 개선하자.
+     */
     @Post('updater')
     async reReadAnnoResAndUpdateDB() {
         return this.reciptToSheetService.reReadAnnoResAndUpdateDB();

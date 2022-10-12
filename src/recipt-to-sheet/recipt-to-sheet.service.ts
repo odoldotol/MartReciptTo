@@ -9,6 +9,7 @@ import googleVisionAnnoInspectorPipe from '../googleVisionAnnoPipe/inspector.V0.
 import getReceiptObject from '../receiptObj/get.V0.1.1';
 import { MultipartBodyDto } from './dto/multipartBody.dto';
 import { writeFile } from 'fs';
+import { readdir } from 'node:fs/promises';
 import { v4 as uuidv4 } from 'uuid'
 import { Receipt } from '../receiptObj/define.V0.1.1'
 import { InjectModel } from '@nestjs/mongoose';
@@ -137,7 +138,7 @@ export class ReciptToSheetService {
     };
 
     /**
-     * 이용중지
+     * 더이상 사용하지 않음
      */
     // async sendGoogleVisionAnnotateResultToLabs(reciptImage: Express.Multer.File, multipartBody: MultipartBodyDto) {
         
@@ -417,7 +418,7 @@ export class ReciptToSheetService {
         const reqBody = {
             emailAddress: provider.emailAddress,
             sheetFormat: outputRequests[0].sheetFormat,
-            receiptStyle: providerInput.receiptStyle
+            receiptStyle: providerInput.receiptStyle? providerInput.receiptStyle : 'notProvided',
         }
 
         const imageUriFilePath = uriPathConverter.toPath(imageUri)
@@ -427,5 +428,47 @@ export class ReciptToSheetService {
 
         data = "export = " + JSON.stringify(reqBody, null, 4);
         writeFile(`src/googleVisionAnnoLab/annotateResult/${reqBody.receiptStyle}/${imageUriFilePath}-body.ts`, data, () => { console.log("WRITED: a multipartBody file"); });
+    };
+
+    /**
+     * #### DB 의 모든 영수증 객체들을 로컬 LAB 에 EXPECTED 로 만든다.
+     * - 이미 파일로 존재히는 이미지URI 라면 다운로드하지 않는다. (=기존의 것이 변경될수는 없다)
+     */
+    async downloadReceiptsToExpected() {
+        // 스타일 목록
+        const receiptStyles = await readdir('src/googleVisionAnnoLab/expectReceipt/')
+
+        // 필터만들기
+        // 스타일 별로 and 필터로 로컬 expected 에 없는것만 필터링하고 각각을 or 필터로 묶음
+        let filterOr = []
+        for (const receiptStyle of receiptStyles) {
+            let imageAddArr = await readdir(`src/googleVisionAnnoLab/expectReceipt/${receiptStyle}`)
+            imageAddArr = imageAddArr.map((fileName) => {
+                return uriPathConverter.toUri(fileName).slice(0, -3)
+            });
+            filterOr.push({$and: [{'providerInput.receiptStyle': receiptStyle},{imageAddress: {$nin: imageAddArr}}]},)
+        };
+        
+        // 로컬 expected 에 없는 영수증만 가져옴
+        const receipts = await this.receiptModel.find({$or: filterOr}, "providerInput imageAddress itemArray readFromReceipt").exec()
+
+        if (receipts.length === 0) {
+            return 'No new receipt to download to expected'
+        };
+
+        // expected 생성
+        let pathArr = []
+        receipts.forEach(async (receipt) => {
+            const imageUriFilePath = uriPathConverter.toPath(receipt.imageAddress)
+            const data = "export = " + JSON.stringify(receipt, null, 4);
+            writeFile(`src/googleVisionAnnoLab/expectReceipt/${receipt.providerInput.receiptStyle}/${imageUriFilePath}.ts`, data, () => {
+                pathArr.push(`${receipt.providerInput.receiptStyle}/${imageUriFilePath}`)
+            });
+        });
+
+        return {
+            path: pathArr,
+            count: pathArr.length
+        };
     };
 };
