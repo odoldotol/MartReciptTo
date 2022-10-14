@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Post, Redirect, UnauthorizedException, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Post, Query, Redirect, UnauthorizedException, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MultipartBodyDto } from './dto/multipartBody.dto';
@@ -46,7 +46,7 @@ export class ReciptToSheetController {
      * #### 작업할 annoRes 를 로컬 LAB 으로 가져오기
      */
     @Post('lab/write-annores')
-    async writeAnnoResByImageUri(@Body() body) {
+    writeAnnoResByImageUri(@Body() body: {imageUri: string}) {
         return this.reciptToSheetService.writeAnnoResByImageUri(body);
     };
 
@@ -55,8 +55,17 @@ export class ReciptToSheetController {
      * - 추후에 필터를 줘서 다운로드할 수 있도록 개선하자.
      */
     @Post('lab/download-receipts-to-expected')
-    async downloadReceiptsToExpected() {
+    downloadReceiptsToExpected() {
         return this.reciptToSheetService.downloadReceiptsToExpected();
+    };
+
+    /**
+     * #### TEST (로컬의 EXPECTED vs 주어진 GET 버젼으로 DB 의 AnnoRes 를 읽은 결과물)
+     * 해결된 문제점과 새로 생긴 문제점을 찾아내야한다.
+     */
+    @Get('lab/test')
+    testGetOnDB(@Query('getVersion') getVersion: string) {
+        return this.reciptToSheetService.testGetOnDB(getVersion);
     };
 
     /**
@@ -64,7 +73,7 @@ export class ReciptToSheetController {
      * - 추후에 필터를 줘서 업데이트할 수 있도록 개선하자.
      */
     @Post('updater')
-    async reReadAnnoResAndUpdateDB() {
+    reReadAnnoResAndUpdateDB() {
         return this.reciptToSheetService.reReadAnnoResAndUpdateDB();
     };
 };

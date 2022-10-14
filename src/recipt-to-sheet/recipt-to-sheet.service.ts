@@ -6,12 +6,11 @@ import sgMail from '@sendgrid/mail';
 import { ConfigService } from '@nestjs/config';
 import xlsx from 'xlsx'
 import googleVisionAnnoInspectorPipe from '../googleVisionAnnoPipe/inspector.V0.0.1';
-import getReceiptObject from '../receiptObj/get.V0.1.1';
+import * as receiptObject from '../receiptObj';
 import { MultipartBodyDto } from './dto/multipartBody.dto';
-import { writeFile } from 'fs';
-import { readdir } from 'node:fs/promises';
+import { writeFile, readdir, readFile} from 'node:fs/promises';
 import { v4 as uuidv4 } from 'uuid'
-import { Receipt } from '../receiptObj/define.V0.1.1'
+import { Receipt } from '../receiptObj/define.V0.1.1' // Receipt Version
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Receipt as ReceiptSchemaClass, ReceiptDocument } from './schemas/receipt.schema';
@@ -23,10 +22,11 @@ import uriPathConverter from '../util/uriPathConverter';
 @Injectable()
 export class ReciptToSheetService {
 
-    private imageAnnotatorClient: ImageAnnotatorClient
-    private sgMail
-    private googleCloudStorage: Storage
-    private bucketName: string
+    private readonly imageAnnotatorClient: ImageAnnotatorClient
+    private readonly sgMail
+    private readonly googleCloudStorage: Storage
+    private readonly bucketName: string
+    private readonly getReceiptObject
 
     constructor(
         private readonly configService: ConfigService,
@@ -37,6 +37,7 @@ export class ReciptToSheetService {
         this.imageAnnotatorClient = new ImageAnnotatorClient({credentials});
         this.sgMail = sgMail.setApiKey(this.configService.get('SENDGRID_API_KEY'))
         this.googleCloudStorage = new Storage({credentials});
+
         if (this.configService.get('MONGO_database') === "receiptTo") {
             this.bucketName = "receipt-image-dev"
         }
@@ -46,8 +47,10 @@ export class ReciptToSheetService {
         else {
             console.log('MONGO_database: ', this.configService.get('MONGO_database'))
             throw new InternalServerErrorException("failed to set bucketName")
-        }
-    }
+        };
+
+        this.getReceiptObject = receiptObject.get_V0_1_1; // Receipt Version
+    };
 
     /**
      * FE
@@ -112,7 +115,7 @@ export class ReciptToSheetService {
         1. 어디 영수증인지 알아내기 -> 일단, 이 부분 무시하고 홈플러스 라고 가정
         2. 홈플러스 솔루션으로 text 추출하여 영수증객체 만들기
         */
-        const {receipt, failures, permits} = getReceiptObject(
+        const {receipt, failures, permits} = this.getReceiptObject(
             googleVisionAnnoInspectorPipe(annoRes), // 파이프 돌릴떄의 발견되는 예외도 보고 받을수 있도록 수정해야함
             multipartBody,
             imageUri
@@ -424,10 +427,14 @@ export class ReciptToSheetService {
         const imageUriFilePath = uriPathConverter.toPath(imageUri)
 
         let data = "export = " + JSON.stringify(annoRes, null, 4);
-        writeFile(`src/googleVisionAnnoLab/annotateResult/${reqBody.receiptStyle}/${imageUriFilePath}.ts`, data, () => { console.log("WRITED: an annotateResult file"); });
+        writeFile(`src/googleVisionAnnoLab/annotateResult/${reqBody.receiptStyle}/${imageUriFilePath}.ts`, data)
+        .then(() => { console.log("WRITED: an annotateResult file"); })
+        .catch(err => { console.log("WRITE ERROR: ", err); });
 
         data = "export = " + JSON.stringify(reqBody, null, 4);
-        writeFile(`src/googleVisionAnnoLab/annotateResult/${reqBody.receiptStyle}/${imageUriFilePath}-body.ts`, data, () => { console.log("WRITED: a multipartBody file"); });
+        writeFile(`src/googleVisionAnnoLab/annotateResult/${reqBody.receiptStyle}/${imageUriFilePath}-body.ts`, data)
+        .then(() => { console.log("WRITED: a multipartBody file"); })
+        .catch(err => { console.log("WRITE ERROR: ", err); });
     };
 
     /**
@@ -457,18 +464,191 @@ export class ReciptToSheetService {
         };
 
         // expected 생성
-        let pathArr = []
-        receipts.forEach(async (receipt) => {
+        const pathArr = []
+        const writeFilePromiseArr = receipts.map((receipt) => {
             const imageUriFilePath = uriPathConverter.toPath(receipt.imageAddress)
             const data = "export = " + JSON.stringify(receipt, null, 4);
-            writeFile(`src/googleVisionAnnoLab/expectReceipt/${receipt.providerInput.receiptStyle}/${imageUriFilePath}.ts`, data, () => {
-                pathArr.push(`${receipt.providerInput.receiptStyle}/${imageUriFilePath}`)
-            });
+            return writeFile(`src/googleVisionAnnoLab/expectReceipt/${receipt.providerInput.receiptStyle}/${imageUriFilePath}.ts`, data)
+            .then(() => {
+                pathArr.push(`${receipt.providerInput.receiptStyle}/${receipt.imageAddress}`)
+                return
+            })
+            .catch(err => { console.log("WRITE ERROR: ", err); });
         });
 
+        await Promise.all(writeFilePromiseArr);
         return {
             path: pathArr,
             count: pathArr.length
         };
+    };
+
+    /**
+     * #### 입력된 Version 의 get 으로 DB 에서 TEST
+     * - 기존에 failures 없던것 : 문제 생기는지 탐색
+     * - 기존에 failures 있던것 : 새로이 해결된 경우가 있어야함 (그것들은 후에 따로 처리(expected 업데이트해주기)해야함)
+     * 
+     * #### response
+     * - failures 없던것(noFailureImages) 성공 몇개, 문제발생 몇개, 문제발생이미지주소배열
+     * - failures 있던것(failureImages) 문제있음 몇개, 문제제거 몇개, 문제제거이미지주소배열
+     * - 문제발생(newFailureImages)들의 {imageAddress, permits, receipt차이점, failures} 나열
+     * - 문제제거(newSuccessImages)들의 {imageAddress, permits, receipt, expected, failures} 나열
+     */
+    async testGetOnDB(getVersion: string) {
+        // get 가져오기
+        const testGet = receiptObject[`get_${getVersion}`]
+        if (!testGet) {
+            throw new BadRequestException('getVersion is not valid')
+        };
+
+        const failAnnoResArr = await this.readFailureModel.find({}, 'annotate_responseId').exec()
+        const failAnnoResIdArr = failAnnoResArr.map((failAnnoRes) => {
+            return failAnnoRes.annotate_responseId
+        });
+        
+        // response
+        const noFailureImages = {success: 0, newFailure: 0, newFailureImageAddress: []}
+        const failureImages = {failure: 0, newSuccess: 0, newSuccessImageAddress: []}
+        const newFailureImages = []
+        const newSuccessImages = []
+
+        // 기존에 failures 없던것 (noFailureImages)
+        const annoResNoFailuresArr = await this.annotateResponseModel.find({_id: {$nin: failAnnoResIdArr}}, 'imageAddress response').exec();
+        await annoResNoFailuresArr.reduce(async (acc, annoRes) => {
+            await acc
+            return new Promise(async (resolve) => {
+                try {
+                    const {provider, providerInput} = await this.receiptModel.findOne({imageAddress: annoRes.imageAddress}, 'provider providerInput').exec();
+                    const {receipt, failures, permits} = testGet(annoRes.response, {emailAddress: provider.emailAddress, receiptStyle: providerInput.receiptStyle}, annoRes.imageAddress);
+                    
+                    // permits 에 false 있으면 newFailure 에 추가
+                    let permitTest = true;
+                    for (const permit in permits) {
+                        if (permits[permit] === false) {
+                            permitTest = false
+                            break
+                        };
+                    };
+                    
+                    // failures 있으면 newFailure 에 추가
+                    let failureTest = true;
+                    if (failures.length > 0) {
+                        failureTest = false
+                    };
+
+                    // receipt 차이점 있으면 newFailure 에 추가
+                    let receiptTest = true;
+                    const expected = JSON.parse((await readFile(`src/googleVisionAnnoLab/expectReceipt/${providerInput.receiptStyle}/${uriPathConverter.toPath(annoRes.imageAddress)}.ts`, 'utf8')).slice(9));
+                    const difference = this.compareReceiptToExpected(
+                        receipt,
+                        expected
+                    );
+                    if (difference.length > 0) {
+                        receiptTest = false
+                    };
+
+                    if (!permitTest || !failureTest || !receiptTest) {
+                        noFailureImages.newFailure++
+                        noFailureImages.newFailureImageAddress.push(annoRes.imageAddress)
+                        newFailureImages.push({imageAddress: annoRes.imageAddress, permits, failures, difference})
+                        resolve()
+                    } else {
+                        noFailureImages.success++
+                        resolve()
+                    };
+                } catch (err) {
+                    throw new InternalServerErrorException(err)
+                };
+            });
+        }, Promise.resolve());
+
+        // 기존에 failures 있던것 (failureImages)
+
+
+        return {noFailureImages, failureImages, newFailureImages, newSuccessImages}
+    };
+
+    /**
+     * #### receipt vs expected
+     * 
+     */
+    compareReceiptToExpected(receipt: Receipt, expected) {
+        const difference = []
+        // imageAddress 다르면 종료
+        if (receipt.imageAddress !== expected.imageAddress) {
+            difference.push({key: 'imageAddress', receipt: receipt.imageAddress, expected: expected.imageAddress})
+            return difference;
+        };
+
+        // items 비교
+        const receiptItemLength = receipt.itemArray.length
+        const expectedItemLength = expected.itemArray.length
+        if (receiptItemLength !== expectedItemLength) {
+            difference.push({key: 'itemArray.length', receipt: receiptItemLength, expected: expectedItemLength})
+        } else {
+            receipt.itemArray.forEach((item, itemIdx) => {
+                const itemReadFromReceiptKeyArr = ["productName", "taxExemption", "discountArray", "unitPrice", "quantity", "amount"]
+                itemReadFromReceiptKeyArr.forEach((key) => {
+                    if (key === 'discountArray') {
+                        const receiptDiscountLength = item.readFromReceipt.discountArray.length
+                        const expectedDiscountLength = expected.itemArray[itemIdx].readFromReceipt.discountArray.length
+                        if (receiptDiscountLength !== expectedDiscountLength) {
+                            difference.push({key: `itemArray[${itemIdx}].discountArray.length`, receipt: receiptDiscountLength, expected: expectedDiscountLength})
+                        } else {
+                            item.readFromReceipt[key].forEach((discount, discountIdx) => {
+                                const discountReadFromReceiptKeyArr = ["name", "amount", "code"]
+                                discountReadFromReceiptKeyArr.forEach((key) => {
+                                    const receiptValue = discount[key]
+                                    const expectedValue = expected.itemArray[itemIdx].readFromReceipt.discountArray[discountIdx][key]
+                                    if (receiptValue !== undefined && expectedValue !== undefined) {
+                                        if (receiptValue !== expectedValue) {
+                                            difference.push({key: `itemArray[${itemIdx}].discountArray[${discountIdx}].${key}`, receipt: receiptValue, expected: expectedValue})
+                                        };
+                                    } else if (receiptValue === undefined && expectedValue !== undefined) {
+                                        difference.push({key: `itemArray[${itemIdx}].discountArray[${discountIdx}].${key}`, receipt: undefined, expected: expectedValue})
+                                    } else if (receiptValue !== undefined && expectedValue === undefined) {
+                                        difference.push({key: `itemArray[${itemIdx}].discountArray[${discountIdx}].${key}`, receipt: receiptValue, expected: undefined})
+                                    };
+                                });
+                            });
+                        };
+                    } else {
+                        const receiptValue = item.readFromReceipt[key]
+                        const expectedValue = expected.itemArray[itemIdx].readFromReceipt[key]
+                        if (receiptValue !== undefined && expectedValue !== undefined) {
+                            if (receiptValue !== expectedValue) {
+                                difference.push({key: `itemArray[${itemIdx}].${key}`, receipt: receiptValue, expected: expectedValue})
+                            };
+                        } else if (receiptValue === undefined && expectedValue !== undefined) {
+                            difference.push({key: `itemArray[${itemIdx}].${key}`, receipt: undefined, expected: expectedValue})
+                        } else if (receiptValue !== undefined && expectedValue === undefined) {
+                            difference.push({key: `itemArray[${itemIdx}].${key}`, receipt: receiptValue, expected: undefined})
+                        };
+                    };
+                });
+            });
+        };
+
+        // receiptReadFromReceipt 비교
+        const receiptReadFromReceiptKeyArr = ["date", "name", "tel", "address", "owner", "businessNumber", "taxProductAmount", "taxAmount", "taxExemptionProductAmount"]
+        receiptReadFromReceiptKeyArr.forEach((key) => {
+            let receiptValue = receipt.readFromReceipt[key]
+            let expectedValue = expected.readFromReceipt[key]
+            if (key === 'date') {
+                receiptValue = receiptValue.toString()
+                expectedValue = new Date(expectedValue).toString()
+            }
+            if (receiptValue !== undefined && expectedValue !== undefined) {
+                if (receiptValue !== expectedValue) {
+                    difference.push({key, receipt: receiptValue, expected: expectedValue})
+                };
+            } else if (receiptValue === undefined && expectedValue !== undefined) {
+                difference.push({key, receipt: undefined, expected:expectedValue})
+            } else if (receiptValue !== undefined && expectedValue === undefined) {
+                difference.push({key, receipt: receiptValue, expected: undefined})
+            };
+        });
+
+        return difference
     };
 };
