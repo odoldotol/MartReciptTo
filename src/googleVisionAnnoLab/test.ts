@@ -105,16 +105,16 @@ function expect(receiptObject, expectReceipt) {
     if (receiptObject.itemArray.length === expectReceipt.itemArray.length) {
         let message = ''
         receiptObject.itemArray.forEach((item, index) => {
-            const {productName, unuiPrice, quantity, amount} = item.readFromReceipt
+            const {productName, unitPrice, quantity, amount} = item.readFromReceipt
             const expectedProductName = expectReceipt.itemArray[index].readFromReceipt.productName
-            const expectedUnuiPrice = expectReceipt.itemArray[index].readFromReceipt.unuiPrice
+            const expectedUnitPrice = expectReceipt.itemArray[index].readFromReceipt.unitPrice
             const expectedQuantity = expectReceipt.itemArray[index].readFromReceipt.quantity
             const expectedAmount = expectReceipt.itemArray[index].readFromReceipt.amount
             if (productName !== expectedProductName) {
                 message += `\nIdx:${index}, productName: ${productName}, expected: ${expectedProductName}`
             }
-            if (unuiPrice !== expectedUnuiPrice) {
-                message += `\nIdx:${index}, unuiPrice: ${unuiPrice}, expected: ${expectedUnuiPrice}`
+            if (unitPrice !== expectedUnitPrice) {
+                message += `\nIdx:${index}, unitPrice: ${unitPrice}, expected: ${expectedUnitPrice}`
             }
             if (quantity !== expectedQuantity) {
                 message += `\nIdx:${index}, quantity: ${quantity}, expected: ${expectedQuantity}`

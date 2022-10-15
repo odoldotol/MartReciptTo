@@ -16,9 +16,18 @@ const annotateResult = JSON.parse(readFileSync(`src/googleVisionAnnoLab/annotate
 
 const multipartBody = JSON.parse(readFileSync(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${receiptId}-body.ts`, 'utf8').slice(9));
 
+// 0.2.1 이전
+/*
 const {receipt} = getReceiptObject(
     googleVisionAnnoInspectorPipe(annotateResult),
     multipartBody
+);
+*/
+
+const {receipt} = getReceiptObject(
+    annotateResult,
+    multipartBody,
+    imageUriArray[imageUriIndex]
 );
 
 const data = "export = " + JSON.stringify(receipt, null, 4);
