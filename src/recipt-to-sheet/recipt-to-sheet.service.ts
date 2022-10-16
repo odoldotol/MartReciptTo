@@ -517,38 +517,38 @@ export class ReciptToSheetService {
         // 기존에 failures 없던것 (noFailureImages)
         const annoResNoFailuresArr = await this.annotateResponseModel.find({_id: {$nin: failAnnoResIdArr}}, 'imageAddress response').exec();
         await annoResNoFailuresArr.reduce(async (acc, annoRes) => {
-            await acc
+            const {provider, providerInput} = await this.receiptModel.findOne({imageAddress: annoRes.imageAddress}, 'provider providerInput').exec();
+            const {receipt, failures, permits} = testGet(annoRes.response, {emailAddress: provider.emailAddress, receiptStyle: providerInput.receiptStyle}, annoRes.imageAddress);
+            
+            // receipt 차이점 있으면 or failures 있으면 or permits 에 false 있으면 newFailure 에 추가
+            const expected = JSON.parse((await readFile(`src/googleVisionAnnoLab/expectReceipt/${providerInput.receiptStyle}/${uriPathConverter.toPath(annoRes.imageAddress)}.ts`, 'utf8')).slice(9));
+            const difference = this.compareReceiptToExpected(
+                receipt,
+                expected
+            );
+            const newFailureTest = (() => {
+                if (difference.length > 0) {
+                    return true
+                };
+                if (failures.length > 0) {
+                    return true
+                };
+                let permitTest = true;
+                for (const permit in permits) {
+                    if (permits[permit] === false) {
+                        permitTest = false
+                        break
+                    };
+                };
+                if (!permitTest) {
+                    return true
+                };
+                return false
+            })();
+            
+            await acc;
             return new Promise(async (resolve, reject) => {
                 try {
-                    const {provider, providerInput} = await this.receiptModel.findOne({imageAddress: annoRes.imageAddress}, 'provider providerInput').exec();
-                    const {receipt, failures, permits} = testGet(annoRes.response, {emailAddress: provider.emailAddress, receiptStyle: providerInput.receiptStyle}, annoRes.imageAddress);
-                    
-                    // receipt 차이점 있으면 or failures 있으면 or permits 에 false 있으면 newFailure 에 추가
-                    const expected = JSON.parse((await readFile(`src/googleVisionAnnoLab/expectReceipt/${providerInput.receiptStyle}/${uriPathConverter.toPath(annoRes.imageAddress)}.ts`, 'utf8')).slice(9));
-                    const difference = this.compareReceiptToExpected(
-                        receipt,
-                        expected
-                    );
-                    const newFailureTest = (() => {
-                        if (difference.length > 0) {
-                            return true
-                        };
-                        if (failures.length > 0) {
-                            return true
-                        };
-                        let permitTest = true;
-                        for (const permit in permits) {
-                            if (permits[permit] === false) {
-                                permitTest = false
-                                break
-                            };
-                        };
-                        if (!permitTest) {
-                            return true
-                        };
-                        return false
-                    })();
-
                     if (newFailureTest) {
                         noFailureImages.newFailure++
                         noFailureImages.newFailureImageAddress.push(annoRes.imageAddress)
@@ -634,6 +634,7 @@ export class ReciptToSheetService {
     /**
      * #### receipt vs expected
      * 
+     * - 중복코드 제거
      */
     compareReceiptToExpected(receipt: Receipt, expected) {
         const difference = []
