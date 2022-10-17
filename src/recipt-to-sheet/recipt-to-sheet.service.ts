@@ -508,15 +508,26 @@ export class ReciptToSheetService {
         });
         
         // response
-        const noFailureImages = {success: 0, newFailure: 0, newFailureImageAddress: []}
-        const failureImages = {failure: 0, newSuccess: 0, newSuccessImageAddress: []}
-        const newFailureImages = []
-        const newSuccessImages = []
-        const permitsDifferencesInFailures = []
+        const testOn = {total: 0, noFailures: 0, failures: 0}
+        const noFailureImages = {success: 0, newFailure: 0}
+        const failureImages = {failure: 0, failureDetail: {permitChange: 0}, newSuccess: 0}
+        const detail = {
+            newFailureImageAddresses: [],
+            newFailures: [],
+            newSuccessImageAddresses: [],
+            newSuccesses: [],
+            failuresWithPermitChangeImageAddresses: [],
+            failuresWithPermitChange: []
+        }
 
-        // 
+        // annoRes 가져오는거 너무 오래걸림!!
         const annoResNoFailuresArr = await this.annotateResponseModel.find({_id: {$nin: failAnnoResIdArr}}, 'imageAddress response').exec();
         const annoResFailuresArr = await this.annotateResponseModel.find({_id: {$in: failAnnoResIdArr}}, 'imageAddress response').exec();
+
+        // testOn
+        testOn.total = annoResNoFailuresArr.length + annoResFailuresArr.length
+        testOn.noFailures = annoResNoFailuresArr.length
+        testOn.failures = annoResFailuresArr.length
 
         await Promise.all([
             // 기존에 failures 없던것 (noFailureImages)
@@ -555,8 +566,8 @@ export class ReciptToSheetService {
                     try {
                         if (newFailureTest) {
                             noFailureImages.newFailure++
-                            noFailureImages.newFailureImageAddress.push(annoRes.imageAddress)
-                            newFailureImages.push({imageAddress: annoRes.imageAddress, permits, failures, difference})
+                            detail.newFailureImageAddresses.push(annoRes.imageAddress)
+                            detail.newFailures.push({imageAddress: annoRes.imageAddress, permits, failures, difference})
                             resolve()
                         } else {
                             noFailureImages.success++
@@ -602,8 +613,8 @@ export class ReciptToSheetService {
                     try {
                         if (newSuccessTest) {
                             failureImages.newSuccess++
-                            failureImages.newSuccessImageAddress.push(annoRes.imageAddress)
-                            newSuccessImages.push({imageAddress: annoRes.imageAddress, difference})
+                            detail.newSuccessImageAddresses.push(annoRes.imageAddress)
+                            detail.newSuccesses.push({imageAddress: annoRes.imageAddress, difference})
                             resolve()
                         } else {
                             // permits 비교하고 다르면 permitsDifference 생성
@@ -615,7 +626,9 @@ export class ReciptToSheetService {
                                 const prev = prevPermits[permitsKey] === undefined ? false : prevPermits[permitsKey]
                                 const now = permits[permitsKey] === undefined ? false : permits[permitsKey]
                                 if (prev !== now) {
-                                    permitsDifferencesInFailures.push({imageAddress: annoRes.imageAddress, prevPermits, testPermits: permits});
+                                    failureImages.failureDetail.permitChange++
+                                    detail.failuresWithPermitChangeImageAddresses.push(annoRes.imageAddress)
+                                    detail.failuresWithPermitChange.push({imageAddress: annoRes.imageAddress, prevPermits, testPermits: permits});
                                     break;
                                 };
                             };
@@ -631,7 +644,7 @@ export class ReciptToSheetService {
             throw new InternalServerErrorException(err);
         });
 
-        return {noFailureImages, failureImages, newFailureImages, newSuccessImages, permitsDifferencesInFailures}
+        return {testOn, noFailureImages, failureImages, detail}
     };
 
     /**
