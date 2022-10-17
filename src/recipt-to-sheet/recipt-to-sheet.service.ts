@@ -162,8 +162,11 @@ export class ReciptToSheetService {
      * #### 새로운 GET 버젼에 맞게 전체 데이터베이스 업데이트
      * (전부 다 읽기) (로컬에서 새로운 get 버젼이 모든 데이터에 대해서 문제가 없는것을 확인 후에 실행할 것)
      * 
+     * - 새로 성공한것들중에 최신 output 요청이 실패했다면 같은 output 요청을 새로 생성하고 실행해보기
      */
-    reReadAnnoResAndUpdateDB() {};
+    async updateGet(getVersion: string) {
+        const annotate_responses = await this.annotateResponseModel.find().exec();
+    };
 
 
     /**
@@ -412,10 +415,8 @@ export class ReciptToSheetService {
     /**
      * 이미지uri 로 데이터베이스를 뒤져서 annoRes 와 요청 body(복원된) 를 파일로 저장한다.
      */
-    async writeAnnoResByImageUri(body: {imageUri: string}) {
-        const imageUri = body.imageUri
-
-        const {provider, providerInput, annotate_responseId, outputRequests} = await this.receiptModel.findOne({imageAddress: imageUri}, 'provider providerInput annotate_responseId outputRequests').exec()
+    async writeAnnoResByImageAddress(imageAddress: string) {
+        const {provider, providerInput, annotate_responseId, outputRequests} = await this.receiptModel.findOne({imageAddress}, 'provider providerInput annotate_responseId outputRequests').exec()
         const {response: annoRes} = await this.annotateResponseModel.findById(annotate_responseId, 'response').exec()
         
         const reqBody = {
@@ -424,7 +425,7 @@ export class ReciptToSheetService {
             receiptStyle: providerInput.receiptStyle? providerInput.receiptStyle : 'notProvided',
         }
 
-        const imageUriFilePath = uriPathConverter.toPath(imageUri)
+        const imageUriFilePath = uriPathConverter.toPath(imageAddress)
 
         let data = "export = " + JSON.stringify(annoRes, null, 4);
         writeFile(`src/googleVisionAnnoLab/annotateResult/${reqBody.receiptStyle}/${imageUriFilePath}.ts`, data)
@@ -496,10 +497,7 @@ export class ReciptToSheetService {
      */
     async testGetOnDB(getVersion: string) {
         // get 가져오기
-        const testGet = receiptObject[`get_${getVersion}`]
-        if (!testGet) {
-            throw new BadRequestException('getVersion is not valid')
-        };
+        const testGet = this.loadGet(getVersion);
 
         // failAnnoResIdArr 만들기
         const readFailureArr = await this.readFailureModel.find({}, 'annotate_responseId permits imageAddress').exec()
@@ -645,6 +643,41 @@ export class ReciptToSheetService {
         });
 
         return {testOn, noFailureImages, failureImages, detail}
+    };
+
+    /**
+     * #### getVersion 의 Get 으로 imageAddresses 들로 DB 에서 AnnoRes 받아와서 Expected 로컬에 쓰기
+     */
+    async overwriteExpectedByGet(getVersion: string, imageAddresses: string[]) {
+        const getReceipt = this.loadGet(getVersion);
+        return await Promise.all(imageAddresses.map(async (imageAddress) => {
+            const {provider, providerInput, annotate_responseId, outputRequests} = await this.receiptModel.findOne({imageAddress}, 'provider providerInput annotate_responseId outputRequests').exec();
+            const {response: annoRes} = await this.annotateResponseModel.findById(annotate_responseId, 'response').exec();
+            
+            const reqBody = {
+                emailAddress: provider.emailAddress,
+                sheetFormat: outputRequests[0].sheetFormat,
+                receiptStyle: providerInput.receiptStyle? providerInput.receiptStyle : 'notProvided',
+            };
+
+            const {receipt, failures, permits} = getReceipt(annoRes, reqBody, imageAddress);
+
+            const data = "export = " + JSON.stringify(receipt, null, 4);
+            return writeFile(`src/googleVisionAnnoLab/expectReceipt/${providerInput.receiptStyle}/${uriPathConverter.toPath(imageAddress)}.ts`, data, 'utf8');
+        }))
+        .then(() => { return 'success' })
+        .catch((err) => { throw new InternalServerErrorException(err) });
+    };
+
+    /**
+     * #### getVersion 으로 Get 가져오기
+     */
+    loadGet(getVersion: string) {
+        const get = receiptObject[`get_${getVersion}`]
+        if (!get) {
+            throw new BadRequestException('getVersion is not valid')
+        };
+        return get
     };
 
     /**
