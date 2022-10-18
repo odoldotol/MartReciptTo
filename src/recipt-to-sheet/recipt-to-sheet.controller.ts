@@ -46,8 +46,8 @@ export class ReciptToSheetController {
      * #### 작업할 annoRes 를 로컬 LAB 으로 가져오기
      */
     @Post('lab/write-annores')
-    writeAnnoResByImageAddress(@Body() imageAddress: string) {
-        return this.reciptToSheetService.writeAnnoResByImageAddress(imageAddress);
+    writeAnnoResByImageAddress(@Body() body: {imageAddress: string}) {
+        return this.reciptToSheetService.writeAnnoResByImageAddress(body.imageAddress);
     };
 
     /**

@@ -798,11 +798,13 @@ export class ReciptToSheetService {
             let expectedValue = expected.readFromReceipt[key]
             if (key === 'date') {
                 receiptValue = receiptValue.toString()
-                expectedValue = new Date(expectedValue).toString()
+                expectedValue = !expectedValue? new Date(undefined).toString() : new Date(expectedValue).toString()
             }
             if (receiptValue !== undefined && expectedValue !== undefined) {
                 if (receiptValue !== expectedValue) {
-                    difference.push({key, receipt: receiptValue, expected: expectedValue})
+                    if (!Number.isNaN(receiptValue)) {
+                        difference.push({key, receipt: receiptValue, expected: expectedValue})
+                    }
                 };
             } else if (receiptValue === undefined && expectedValue !== undefined) {
                 difference.push({key, receipt: undefined, expected:expectedValue})
