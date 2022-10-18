@@ -5,7 +5,7 @@ import credentials from '../../credential.json';
 import sgMail from '@sendgrid/mail';
 import { ConfigService } from '@nestjs/config';
 import xlsx from 'xlsx'
-import googleVisionAnnoInspectorPipe from '../googleVisionAnnoPipe/inspector.V0.0.1';
+import googleVisionAnnoInspectorPipe from '../receiptObj/googleVisionAnnoPipe/inspector.V0.0.1';
 import * as receiptObject from '../receiptObj';
 import { MultipartBodyDto } from './dto/multipartBody.dto';
 import { writeFile, readdir, readFile} from 'node:fs/promises';
@@ -49,7 +49,7 @@ export class ReciptToSheetService {
             throw new InternalServerErrorException("failed to set bucketName")
         };
 
-        this.getReceiptObject = receiptObject.get_V0_1_1; // Receipt Version
+        this.getReceiptObject = receiptObject.get_V0_2_1; // Receipt Version
     };
 
     /**
@@ -115,11 +115,15 @@ export class ReciptToSheetService {
         1. 어디 영수증인지 알아내기 -> 일단, 이 부분 무시하고 홈플러스 라고 가정
         2. 홈플러스 솔루션으로 text 추출하여 영수증객체 만들기
         */
+        // 0.2.1 이전
+        /*
         const {receipt, failures, permits} = this.getReceiptObject(
             googleVisionAnnoInspectorPipe(annoRes), // 파이프 돌릴떄의 발견되는 예외도 보고 받을수 있도록 수정해야함
             multipartBody,
             imageUri
         );
+        */
+        const {receipt, failures, permits} = this.getReceiptObject(annoRes, multipartBody, imageUri);
 
         // 출력 요청 만들어서 영수증 객체에 넣기
         const requestType = 'provided'
@@ -176,7 +180,7 @@ export class ReciptToSheetService {
             // permits.items 이 true 인데 최신 outputRequest 가 실패인 경우 새로운 outputRequest 생성하고 실행!
             if (!oldReceipt.outputRequests[oldReceipt.outputRequests.length-1].result['Email sent'] && newPermits.items) {
                 newReceipt.addOutputRequest(new Date(), oldReceipt.outputRequests[oldReceipt.outputRequests.length-1].sheetFormat, oldReceipt.provider.emailAddress, 'devUpdated');
-                await this.executeOutputRequest(newReceipt, newPermits)
+                await this.executeOutputRequest(newReceipt, newPermits);
                 oldReceipt.outputRequests.push(newReceipt.outputRequests[0])
             };
             
@@ -275,7 +279,7 @@ export class ReciptToSheetService {
         if (permits.items) {
             // Sheet 만들기 (csv | xlsx) -> attachments 만들기
             const attachments = this.createAttachments(receipt);
-            
+
             // 이메일 보내기
             email = await this.sendEmail(attachments, receipt);
         }
@@ -333,7 +337,7 @@ export class ReciptToSheetService {
     createAttachments(receipt: Receipt) {
         const sheetFormat = receipt.outputRequests[receipt.outputRequests.length-1].sheetFormat;
         let attachment
-        const date = receipt.readFromReceipt.date
+        const date = receipt.readFromReceipt.date? receipt.readFromReceipt.date : new Date(undefined);
         if (sheetFormat === 'csv') {
             // let csvData = "0,1,2,3,4,5,6,7,8,9\n"
             // textArr[0] = '"'+textArr[0]+'"'
@@ -395,7 +399,7 @@ export class ReciptToSheetService {
      * 
      */
     async sendEmail(attachments, receipt: Receipt) {
-        const date = receipt.readFromReceipt.date
+        const date = receipt.readFromReceipt.date? receipt.readFromReceipt.date : new Date(undefined);
         const msg = {
             to: receipt.outputRequests[receipt.outputRequests.length-1].emailAddress, // recipient
             from: 'service.lygo@gmail.com', // verified sender
