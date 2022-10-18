@@ -145,24 +145,6 @@ export class ReciptToSheetService {
     };
 
     /**
-     * 더이상 사용하지 않음
-     */
-    // async sendGoogleVisionAnnotateResultToLabs(reciptImage: Express.Multer.File, multipartBody: MultipartBodyDto) {
-        
-    //     const {receiptStyle, labsReceiptNumber} = multipartBody;
-    //     if (!receiptStyle || !labsReceiptNumber) {
-    //         throw new BadRequestException('receiptStyle or labsReceiptNumber is not available')
-    //     }
-    //     const annotateResult = await this.annotateImage(reciptImage);
-
-    //     let data = "export = " + JSON.stringify(annotateResult, null, 4);
-    //     writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}.ts`, data, () => { console.log("WRITED: an annotateResult file"); });
-
-    //     data = "export = " + JSON.stringify(multipartBody, null, 4);
-    //     writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}-body.ts`, data, () => { console.log("WRITED: a multipartBody file"); });
-    // };
-
-    /**
      * 
      */
     async uploadImageToGCS(mimetype, buffer) {
@@ -400,6 +382,24 @@ export class ReciptToSheetService {
 
     // ------------------------- lab 모듈로 분리하기 -------------------------
     // 중복 기능이나 과정,절차들을 분리,재사용하도록 칼질하기
+
+    /**
+     * 더이상 사용하지 않음
+     */
+    // async sendGoogleVisionAnnotateResultToLabs(reciptImage: Express.Multer.File, multipartBody: MultipartBodyDto) {
+        
+    //     const {receiptStyle, labsReceiptNumber} = multipartBody;
+    //     if (!receiptStyle || !labsReceiptNumber) {
+    //         throw new BadRequestException('receiptStyle or labsReceiptNumber is not available')
+    //     }
+    //     const annotateResult = await this.annotateImage(reciptImage);
+
+    //     let data = "export = " + JSON.stringify(annotateResult, null, 4);
+    //     writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}.ts`, data, () => { console.log("WRITED: an annotateResult file"); });
+
+    //     data = "export = " + JSON.stringify(multipartBody, null, 4);
+    //     writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}-body.ts`, data, () => { console.log("WRITED: a multipartBody file"); });
+    // };
 
     /**
      * 
