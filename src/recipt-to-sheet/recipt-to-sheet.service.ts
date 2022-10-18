@@ -5,7 +5,7 @@ import credentials from '../../credential.json';
 import sgMail from '@sendgrid/mail';
 import { ConfigService } from '@nestjs/config';
 import xlsx from 'xlsx'
-import googleVisionAnnoInspectorPipe from '../googleVisionAnnoPipe/inspector.V0.0.1';
+import googleVisionAnnoInspectorPipe from '../receiptObj/googleVisionAnnoPipe/inspector.V0.0.1';
 import * as receiptObject from '../receiptObj';
 import { MultipartBodyDto } from './dto/multipartBody.dto';
 import { writeFile, readdir, readFile} from 'node:fs/promises';
@@ -49,7 +49,7 @@ export class ReciptToSheetService {
             throw new InternalServerErrorException("failed to set bucketName")
         };
 
-        this.getReceiptObject = receiptObject.get_V0_1_1; // Receipt Version
+        this.getReceiptObject = receiptObject.get_V0_2_1; // Receipt Version
     };
 
     /**
@@ -115,11 +115,15 @@ export class ReciptToSheetService {
         1. 어디 영수증인지 알아내기 -> 일단, 이 부분 무시하고 홈플러스 라고 가정
         2. 홈플러스 솔루션으로 text 추출하여 영수증객체 만들기
         */
+        // 0.2.1 이전
+        /*
         const {receipt, failures, permits} = this.getReceiptObject(
             googleVisionAnnoInspectorPipe(annoRes), // 파이프 돌릴떄의 발견되는 예외도 보고 받을수 있도록 수정해야함
             multipartBody,
             imageUri
         );
+        */
+        const {receipt, failures, permits} = this.getReceiptObject(annoRes, multipartBody, imageUri);
 
         // 출력 요청 만들어서 영수증 객체에 넣기
         const requestType = 'provided'
@@ -160,10 +164,54 @@ export class ReciptToSheetService {
 
     /**
      * #### 새로운 GET 버젼에 맞게 전체 데이터베이스 업데이트
-     * (전부 다 읽기) (로컬에서 새로운 get 버젼이 모든 데이터에 대해서 문제가 없는것을 확인 후에 실행할 것)
+     * (전부 다 읽음) (로컬에서 새로운 get 버젼이 모든 데이터에 대해서 문제가 없는것을 확인 후에 실행할 것)
+     * - 에러핸들링 추가하기
      * 
+     * - 새로 성공한것들중에 최신 output 요청이 실패했다면 같은 output 요청을 새로 생성하고 실행해보기
+     * - readFailures 는 annoRes 모두 읽은 후에 한번에 처리. (만약 중간에 실패하면, 이메일 보낸 기록은 업데이트되야하지만 readFailures 는 이전버전의 상태로 남아있는게좋음)
      */
-    reReadAnnoResAndUpdateDB() {};
+    async updateGet(getVersion: string) {
+        const getReceipt = this.loadGet(getVersion);
+        const annotate_responses = await this.annotateResponseModel.find().exec();
+        const readFailuresSaveArray = [];
+        await annotate_responses.reduce(async (acc, annotate_response) => {
+            const oldReceipt = await this.receiptModel.findOne({imageAddress: annotate_response.imageAddress}).exec();
+            const {receipt: newReceipt, failures: newFailures, permits: newPermits} = getReceipt(annotate_response.response, {emailAddress: oldReceipt.provider.emailAddress, receiptStyle: oldReceipt.providerInput.receiptStyle}, annotate_response.imageAddress);
+            // permits.items 이 true 인데 최신 outputRequest 가 실패인 경우 새로운 outputRequest 생성하고 실행!
+            if (!oldReceipt.outputRequests[oldReceipt.outputRequests.length-1].result['Email sent'] && newPermits.items) {
+                newReceipt.addOutputRequest(new Date(), oldReceipt.outputRequests[oldReceipt.outputRequests.length-1].sheetFormat, oldReceipt.provider.emailAddress, 'devUpdated');
+                await this.executeOutputRequest(newReceipt, newPermits);
+                oldReceipt.outputRequests.push(newReceipt.outputRequests[0])
+            };
+            
+            // receipt 업데이트
+            oldReceipt.itemArray = newReceipt.itemArray;
+            oldReceipt.readFromReceipt = newReceipt.readFromReceipt;
+            await oldReceipt.save();
+
+            await acc;
+            return new Promise(async (resolve, reject) => {
+                try {
+                    if (newFailures.length > 0) {
+                        readFailuresSaveArray.push([newFailures, newPermits, annotate_response.imageAddress, annotate_response._id, oldReceipt._id]);
+                        resolve();
+                    };
+                    resolve();
+                } catch (error) {
+                    reject(error);
+                };
+            });
+        }, Promise.resolve());
+
+        // readFailures 날리기
+        await this.readFailureModel.deleteMany({}).exec();
+
+        // readFailures 저장
+        await readFailuresSaveArray.reduce(async (acc, [newFailures, newPermits, imageAddress, annotate_response_id, receipt_id]) => {
+            await acc;
+            return this.saveFailures(newFailures, newPermits, imageAddress, annotate_response_id, receipt_id);
+        }, Promise.resolve());
+    };
 
 
     /**
@@ -231,7 +279,7 @@ export class ReciptToSheetService {
         if (permits.items) {
             // Sheet 만들기 (csv | xlsx) -> attachments 만들기
             const attachments = this.createAttachments(receipt);
-            
+
             // 이메일 보내기
             email = await this.sendEmail(attachments, receipt);
         }
@@ -289,7 +337,7 @@ export class ReciptToSheetService {
     createAttachments(receipt: Receipt) {
         const sheetFormat = receipt.outputRequests[receipt.outputRequests.length-1].sheetFormat;
         let attachment
-        const date = receipt.readFromReceipt.date
+        const date = receipt.readFromReceipt.date? receipt.readFromReceipt.date : new Date(undefined);
         if (sheetFormat === 'csv') {
             // let csvData = "0,1,2,3,4,5,6,7,8,9\n"
             // textArr[0] = '"'+textArr[0]+'"'
@@ -351,7 +399,7 @@ export class ReciptToSheetService {
      * 
      */
     async sendEmail(attachments, receipt: Receipt) {
-        const date = receipt.readFromReceipt.date
+        const date = receipt.readFromReceipt.date? receipt.readFromReceipt.date : new Date(undefined);
         const msg = {
             to: receipt.outputRequests[receipt.outputRequests.length-1].emailAddress, // recipient
             from: 'service.lygo@gmail.com', // verified sender
@@ -412,10 +460,8 @@ export class ReciptToSheetService {
     /**
      * 이미지uri 로 데이터베이스를 뒤져서 annoRes 와 요청 body(복원된) 를 파일로 저장한다.
      */
-    async writeAnnoResByImageUri(body: {imageUri: string}) {
-        const imageUri = body.imageUri
-
-        const {provider, providerInput, annotate_responseId, outputRequests} = await this.receiptModel.findOne({imageAddress: imageUri}, 'provider providerInput annotate_responseId outputRequests').exec()
+    async writeAnnoResByImageAddress(imageAddress: string) {
+        const {provider, providerInput, annotate_responseId, outputRequests} = await this.receiptModel.findOne({imageAddress}, 'provider providerInput annotate_responseId outputRequests').exec()
         const {response: annoRes} = await this.annotateResponseModel.findById(annotate_responseId, 'response').exec()
         
         const reqBody = {
@@ -424,7 +470,7 @@ export class ReciptToSheetService {
             receiptStyle: providerInput.receiptStyle? providerInput.receiptStyle : 'notProvided',
         }
 
-        const imageUriFilePath = uriPathConverter.toPath(imageUri)
+        const imageUriFilePath = uriPathConverter.toPath(imageAddress)
 
         let data = "export = " + JSON.stringify(annoRes, null, 4);
         writeFile(`src/googleVisionAnnoLab/annotateResult/${reqBody.receiptStyle}/${imageUriFilePath}.ts`, data)
@@ -488,6 +534,8 @@ export class ReciptToSheetService {
      * - 기존에 failures 없던것 : 문제 생기는지 탐색
      * - 기존에 failures 있던것 : 새로이 해결된 경우가 있어야함 (그것들은 후에 따로 처리(expected 업데이트해주기)해야함)
      * 
+     * - 에러핸들링 손보기
+     * 
      * #### response
      * - failures 없던것(noFailureImages) 성공 몇개, 문제발생 몇개, 문제발생이미지주소배열
      * - failures 있던것(failureImages) 문제있음 몇개, 문제제거 몇개, 문제제거이미지주소배열
@@ -496,10 +544,7 @@ export class ReciptToSheetService {
      */
     async testGetOnDB(getVersion: string) {
         // get 가져오기
-        const testGet = receiptObject[`get_${getVersion}`]
-        if (!testGet) {
-            throw new BadRequestException('getVersion is not valid')
-        };
+        const testGet = this.loadGet(getVersion);
 
         // failAnnoResIdArr 만들기
         const readFailureArr = await this.readFailureModel.find({}, 'annotate_responseId permits imageAddress').exec()
@@ -508,132 +553,186 @@ export class ReciptToSheetService {
         });
         
         // response
-        const noFailureImages = {success: 0, newFailure: 0, newFailureImageAddress: []}
-        const failureImages = {failure: 0, newSuccess: 0, newSuccessImageAddress: []}
-        const newFailureImages = []
-        const newSuccessImages = []
-        const permitsDifferencesInFailures = []
+        const testOn = {total: 0, noFailures: 0, failures: 0}
+        const noFailureImages = {success: 0, newFailure: 0}
+        const failureImages = {failure: 0, failureDetail: {permitChange: 0}, newSuccess: 0}
+        const detail = {
+            newFailureImageAddresses: [],
+            newFailures: [],
+            newSuccessImageAddresses: [],
+            newSuccesses: [],
+            failuresWithPermitChangeImageAddresses: [],
+            failuresWithPermitChange: []
+        }
 
-        // 기존에 failures 없던것 (noFailureImages)
+        // annoRes 가져오는거 너무 오래걸림!!
         const annoResNoFailuresArr = await this.annotateResponseModel.find({_id: {$nin: failAnnoResIdArr}}, 'imageAddress response').exec();
-        await annoResNoFailuresArr.reduce(async (acc, annoRes) => {
-            await acc
-            return new Promise(async (resolve, reject) => {
-                try {
-                    const {provider, providerInput} = await this.receiptModel.findOne({imageAddress: annoRes.imageAddress}, 'provider providerInput').exec();
-                    const {receipt, failures, permits} = testGet(annoRes.response, {emailAddress: provider.emailAddress, receiptStyle: providerInput.receiptStyle}, annoRes.imageAddress);
-                    
-                    // receipt 차이점 있으면 or failures 있으면 or permits 에 false 있으면 newFailure 에 추가
+        const annoResFailuresArr = await this.annotateResponseModel.find({_id: {$in: failAnnoResIdArr}}, 'imageAddress response').exec();
+
+        // testOn
+        testOn.total = annoResNoFailuresArr.length + annoResFailuresArr.length
+        testOn.noFailures = annoResNoFailuresArr.length
+        testOn.failures = annoResFailuresArr.length
+
+        await Promise.all([
+            // 기존에 failures 없던것 (noFailureImages)
+            await annoResNoFailuresArr.reduce(async (acc, annoRes) => {
+                const {provider, providerInput} = await this.receiptModel.findOne({imageAddress: annoRes.imageAddress}, 'provider providerInput').exec();
+                const {receipt, failures, permits} = testGet(annoRes.response, {emailAddress: provider.emailAddress, receiptStyle: providerInput.receiptStyle}, annoRes.imageAddress);
+                
+                // receipt 차이점 있으면 or failures 있으면 or permits 에 false 있으면 newFailure 에 추가
+                const expected = JSON.parse((await readFile(`src/googleVisionAnnoLab/expectReceipt/${providerInput.receiptStyle}/${uriPathConverter.toPath(annoRes.imageAddress)}.ts`, 'utf8')).slice(9));
+                const difference = this.compareReceiptToExpected(
+                    receipt,
+                    expected
+                );
+                const newFailureTest = (() => {
+                    if (difference.length > 0) {
+                        return true
+                    };
+                    if (failures.length > 0) {
+                        return true
+                    };
+                    let permitTest = true;
+                    for (const permit in permits) {
+                        if (permits[permit] === false) {
+                            permitTest = false
+                            break
+                        };
+                    };
+                    if (!permitTest) {
+                        return true
+                    };
+                    return false
+                })();
+
+                await acc;
+                return new Promise(async (resolve, reject) => {
+                    try {
+                        if (newFailureTest) {
+                            noFailureImages.newFailure++
+                            detail.newFailureImageAddresses.push(annoRes.imageAddress)
+                            detail.newFailures.push({imageAddress: annoRes.imageAddress, permits, failures, difference})
+                            resolve()
+                        } else {
+                            noFailureImages.success++
+                            resolve()
+                        };
+                    } catch (err) {
+                        reject(err.stack)
+                    };
+                });
+            }, Promise.resolve()),
+
+            // 기존에 failures 있던것 (failureImages)
+            await annoResFailuresArr.reduce(async (acc, annoRes) => {
+                const {provider, providerInput} = await this.receiptModel.findOne({imageAddress: annoRes.imageAddress}, 'provider providerInput').exec();
+                const {receipt, failures, permits} = testGet(annoRes.response, {emailAddress: provider.emailAddress, receiptStyle: providerInput.receiptStyle}, annoRes.imageAddress);
+
+                // permits 에 false 없고, failures 도 없으면 newSuccess 에 추가
+                let newSuccessTest = false
+                if (failures.length === 0) {
+                    let permitTest = true;
+                    for (const permit in permits) {
+                        if (permits[permit] === false) {
+                            permitTest = false
+                            break
+                        };
+                    };
+                    if (permitTest) {
+                        newSuccessTest = true
+                    };
+                };
+
+                let difference
+                if (newSuccessTest) {
                     const expected = JSON.parse((await readFile(`src/googleVisionAnnoLab/expectReceipt/${providerInput.receiptStyle}/${uriPathConverter.toPath(annoRes.imageAddress)}.ts`, 'utf8')).slice(9));
-                    const difference = this.compareReceiptToExpected(
+                    difference = this.compareReceiptToExpected(
                         receipt,
                         expected
                     );
-                    const newFailureTest = (() => {
-                        if (difference.length > 0) {
-                            return true
-                        };
-                        if (failures.length > 0) {
-                            return true
-                        };
-                        let permitTest = true;
-                        for (const permit in permits) {
-                            if (permits[permit] === false) {
-                                permitTest = false
-                                break
-                            };
-                        };
-                        if (!permitTest) {
-                            return true
-                        };
-                        return false
-                    })();
-
-                    if (newFailureTest) {
-                        noFailureImages.newFailure++
-                        noFailureImages.newFailureImageAddress.push(annoRes.imageAddress)
-                        newFailureImages.push({imageAddress: annoRes.imageAddress, permits, failures, difference})
-                        resolve()
-                    } else {
-                        noFailureImages.success++
-                        resolve()
-                    };
-                } catch (err) {
-                    reject(err.stack)
                 };
-            });
-        }, Promise.resolve())
-        .catch((err) => {
+
+                await acc;
+                return new Promise(async (resolve, reject) => {
+                    try {
+                        if (newSuccessTest) {
+                            failureImages.newSuccess++
+                            detail.newSuccessImageAddresses.push(annoRes.imageAddress)
+                            detail.newSuccesses.push({imageAddress: annoRes.imageAddress, difference})
+                            resolve()
+                        } else {
+                            // permits 비교하고 다르면 permitsDifference 생성
+                            const prevPermits = readFailureArr.find((readFailure) => {
+                                return readFailure.imageAddress === annoRes.imageAddress
+                            }).permits
+                            const permitsKeyArr = ['items', 'receiptInfo', 'shopInfo', 'taxSummary'/*, 'amountSummary'*/]
+                            for (const permitsKey of permitsKeyArr) {
+                                const prev = prevPermits[permitsKey] === undefined ? false : prevPermits[permitsKey]
+                                const now = permits[permitsKey] === undefined ? false : permits[permitsKey]
+                                if (prev !== now) {
+                                    failureImages.failureDetail.permitChange++
+                                    detail.failuresWithPermitChangeImageAddresses.push(annoRes.imageAddress)
+                                    detail.failuresWithPermitChange.push({imageAddress: annoRes.imageAddress, prevPermits, testPermits: permits});
+                                    break;
+                                };
+                            };
+                            failureImages.failure++
+                            resolve()
+                        };
+                    } catch (err) {
+                        reject(err.stack)
+                    };
+                });
+            }, Promise.resolve())
+        ]).catch((err) => {
             throw new InternalServerErrorException(err);
         });
 
-        // 기존에 failures 있던것 (failureImages)
-        const annoResFailuresArr = await this.annotateResponseModel.find({_id: {$in: failAnnoResIdArr}}, 'imageAddress response').exec();
-        await annoResFailuresArr.reduce(async (acc, annoRes) => {
-            await acc
-            return new Promise(async (resolve, reject) => {
-                try {
-                    const {provider, providerInput} = await this.receiptModel.findOne({imageAddress: annoRes.imageAddress}, 'provider providerInput').exec();
-                    const {receipt, failures, permits} = testGet(annoRes.response, {emailAddress: provider.emailAddress, receiptStyle: providerInput.receiptStyle}, annoRes.imageAddress);
+        return {testOn, noFailureImages, failureImages, detail}
+    };
 
-                    // permits 에 false 없고, failures 도 없으면 newSuccess 에 추가
-                    let newSuccessTest = false
-                    if (failures.length === 0) {
-                        let permitTest = true;
-                        for (const permit in permits) {
-                            if (permits[permit] === false) {
-                                permitTest = false
-                                break
-                            };
-                        };
-                        if (permitTest) {
-                            newSuccessTest = true
-                        };
-                    };
+    /**
+     * #### getVersion 의 Get 으로 imageAddresses 들로 DB 에서 AnnoRes 받아와서 Expected 로컬에 쓰기
+     * 
+     * - 에러핸들링 손보기
+     */
+    async overwriteExpectedByGet(getVersion: string, imageAddresses: string[]) {
+        const getReceipt = this.loadGet(getVersion);
+        return await Promise.all(imageAddresses.map(async (imageAddress) => {
+            const {provider, providerInput, annotate_responseId, outputRequests} = await this.receiptModel.findOne({imageAddress}, 'provider providerInput annotate_responseId outputRequests').exec();
+            const {response: annoRes} = await this.annotateResponseModel.findById(annotate_responseId, 'response').exec();
+            
+            const reqBody = {
+                emailAddress: provider.emailAddress,
+                sheetFormat: outputRequests[0].sheetFormat,
+                receiptStyle: providerInput.receiptStyle? providerInput.receiptStyle : 'notProvided',
+            };
 
-                    if (newSuccessTest) {
-                        const expected = JSON.parse((await readFile(`src/googleVisionAnnoLab/expectReceipt/${providerInput.receiptStyle}/${uriPathConverter.toPath(annoRes.imageAddress)}.ts`, 'utf8')).slice(9));
-                        const difference = this.compareReceiptToExpected(
-                            receipt,
-                            expected
-                        );
-                        failureImages.newSuccess++
-                        failureImages.newSuccessImageAddress.push(annoRes.imageAddress)
-                        newSuccessImages.push({imageAddress: annoRes.imageAddress, difference})
-                        resolve()
-                    } else {
-                        // permits 비교하고 다르면 permitsDifference 생성
-                        const prevPermits = readFailureArr.find((readFailure) => {
-                            return readFailure.imageAddress === annoRes.imageAddress
-                        }).permits
-                        const permitsKeyArr = ['items', 'receiptInfo', 'shopInfo', 'taxSummary'/*, 'amountSummary'*/]
-                        for (const permitsKey of permitsKeyArr) {
-                            const prev = prevPermits[permitsKey] === undefined ? false : prevPermits[permitsKey]
-                            const now = permits[permitsKey] === undefined ? false : permits[permitsKey]
-                            if (prev !== now) {
-                                permitsDifferencesInFailures.push({imageAddress: annoRes.imageAddress, prevPermits, testPermits: permits});
-                                break;
-                            };
-                        };
-                        failureImages.failure++
-                        resolve()
-                    };
-                } catch (err) {
-                    reject(err.stack)
-                };
-            });
-        }, Promise.resolve())
-        .catch((err) => {
-            throw new InternalServerErrorException(err);
-        });
+            const {receipt} = getReceipt(annoRes, reqBody, imageAddress);
 
+            const data = "export = " + JSON.stringify(receipt, null, 4);
+            return writeFile(`src/googleVisionAnnoLab/expectReceipt/${providerInput.receiptStyle}/${uriPathConverter.toPath(imageAddress)}.ts`, data, 'utf8');
+        }))
+        .then(() => { return 'success' })
+        .catch((err) => { throw new InternalServerErrorException(err) });
+    };
 
-        return {noFailureImages, failureImages, newFailureImages, newSuccessImages, permitsDifferencesInFailures}
+    /**
+     * #### getVersion 으로 Get 가져오기
+     */
+    loadGet(getVersion: string) {
+        const get = receiptObject[`get_${getVersion}`]
+        if (!get) {
+            throw new BadRequestException('getVersion is not valid')
+        };
+        return get
     };
 
     /**
      * #### receipt vs expected
      * 
+     * - 중복코드 제거
      */
     compareReceiptToExpected(receipt: Receipt, expected) {
         const difference = []
@@ -699,11 +798,13 @@ export class ReciptToSheetService {
             let expectedValue = expected.readFromReceipt[key]
             if (key === 'date') {
                 receiptValue = receiptValue.toString()
-                expectedValue = new Date(expectedValue).toString()
+                expectedValue = !expectedValue? new Date(undefined).toString() : new Date(expectedValue).toString()
             }
             if (receiptValue !== undefined && expectedValue !== undefined) {
                 if (receiptValue !== expectedValue) {
-                    difference.push({key, receipt: receiptValue, expected: expectedValue})
+                    if (!Number.isNaN(receiptValue)) {
+                        difference.push({key, receipt: receiptValue, expected: expectedValue})
+                    }
                 };
             } else if (receiptValue === undefined && expectedValue !== undefined) {
                 difference.push({key, receipt: undefined, expected:expectedValue})

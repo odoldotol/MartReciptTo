@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Post, Query, Redirect, UnauthorizedException, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Post, Put, Query, Redirect, UnauthorizedException, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MultipartBodyDto } from './dto/multipartBody.dto';
@@ -31,7 +31,7 @@ export class ReciptToSheetController {
     };
 
 
-    // lab module 분리하기?
+    // lab module 분리
 
     /**
      * 더이상 사용하지 않음
@@ -46,8 +46,8 @@ export class ReciptToSheetController {
      * #### 작업할 annoRes 를 로컬 LAB 으로 가져오기
      */
     @Post('lab/write-annores')
-    writeAnnoResByImageUri(@Body() body: {imageUri: string}) {
-        return this.reciptToSheetService.writeAnnoResByImageUri(body);
+    writeAnnoResByImageAddress(@Body() body: {imageAddress: string}) {
+        return this.reciptToSheetService.writeAnnoResByImageAddress(body.imageAddress);
     };
 
     /**
@@ -69,11 +69,19 @@ export class ReciptToSheetController {
     };
 
     /**
+     * #### Expected 다시쓰기
+     */
+    @Put('lab/overwrite-expected')
+    overwriteExpectedByGet(@Query('getVersion') getVersion: string, @Body() imageAddresses: string[]) {
+        return this.reciptToSheetService.overwriteExpectedByGet(getVersion, imageAddresses);
+    }
+
+    /**
      * #### 업데이터
      * - 추후에 필터를 줘서 업데이트할 수 있도록 개선하자.
      */
-    @Post('updater')
-    reReadAnnoResAndUpdateDB() {
-        return this.reciptToSheetService.reReadAnnoResAndUpdateDB();
+    @Post('lab/update-get')
+    updateGet(@Query('getVersion') getVersion: string) {
+        return this.reciptToSheetService.updateGet(getVersion);
     };
 };

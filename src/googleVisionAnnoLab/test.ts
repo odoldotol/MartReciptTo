@@ -1,5 +1,5 @@
 import getReceiptObject from '../receiptObj/get.V0.2.1';
-import googleVisionAnnoInspectorPipe from '../googleVisionAnnoPipe/inspector.V0.0.1';
+import googleVisionAnnoInspectorPipe from '../receiptObj/googleVisionAnnoPipe/inspector.V0.0.1';
 import { readFileSync } from 'fs';
 import uriPathConverter from '../util/uriPathConverter';
 import imageUriArray from './homeplusUriArray';
@@ -20,10 +20,14 @@ while (true) {
         const multipartBody = JSON.parse(readFileSync(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${receiptNumber}-body.ts`, 'utf8').slice(9));
         const expectReceipt = JSON.parse(readFileSync(`src/googleVisionAnnoLab/expectReceipt/${receiptStyle}/${receiptNumber}.ts`, 'utf8').slice(9));
 
+        // 0.2.1 이전
+        /*
         const {receipt} = getReceiptObject(
             googleVisionAnnoInspectorPipe(annotateResult),
             multipartBody
         );
+        */
+        const {receipt} = getReceiptObject(annotateResult, multipartBody);
 
         const expectResult = expect(receipt, expectReceipt)
         // expect 만족하면
@@ -64,11 +68,15 @@ while (true) {
         const multipartBody = JSON.parse(readFileSync(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${receiptId}-body.ts`, 'utf8').slice(9));
         const expectReceipt = JSON.parse(readFileSync(`src/googleVisionAnnoLab/expectReceipt/${receiptStyle}/${receiptId}.ts`, 'utf8').slice(9));
 
+        // 0.2.1 이전
+        /*
         const {receipt} = getReceiptObject(
             googleVisionAnnoInspectorPipe(annotateResult),
             multipartBody
         );
-
+        */
+        const {receipt} = getReceiptObject(annotateResult, multipartBody);
+        
         const expectResult = expect(receipt, expectReceipt)
 
         // expect 만족하면
