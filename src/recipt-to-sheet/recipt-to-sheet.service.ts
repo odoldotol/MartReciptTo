@@ -160,12 +160,53 @@ export class ReciptToSheetService {
 
     /**
      * #### 새로운 GET 버젼에 맞게 전체 데이터베이스 업데이트
-     * (전부 다 읽기) (로컬에서 새로운 get 버젼이 모든 데이터에 대해서 문제가 없는것을 확인 후에 실행할 것)
+     * (전부 다 읽음) (로컬에서 새로운 get 버젼이 모든 데이터에 대해서 문제가 없는것을 확인 후에 실행할 것)
+     * - 에러핸들링 추가하기
      * 
      * - 새로 성공한것들중에 최신 output 요청이 실패했다면 같은 output 요청을 새로 생성하고 실행해보기
+     * - readFailures 는 annoRes 모두 읽은 후에 한번에 처리. (만약 중간에 실패하면, 이메일 보낸 기록은 업데이트되야하지만 readFailures 는 이전버전의 상태로 남아있는게좋음)
      */
     async updateGet(getVersion: string) {
+        const getReceipt = this.loadGet(getVersion);
         const annotate_responses = await this.annotateResponseModel.find().exec();
+        const readFailuresSaveArray = [];
+        await annotate_responses.reduce(async (acc, annotate_response) => {
+            const oldReceipt = await this.receiptModel.findOne({imageAddress: annotate_response.imageAddress}).exec();
+            const {receipt: newReceipt, failures: newFailures, permits: newPermits} = getReceipt(annotate_response.response, {emailAddress: oldReceipt.provider.emailAddress, receiptStyle: oldReceipt.providerInput.receiptStyle}, annotate_response.imageAddress);
+            // permits.items 이 true 인데 최신 outputRequest 가 실패인 경우 새로운 outputRequest 생성하고 실행!
+            if (!oldReceipt.outputRequests[oldReceipt.outputRequests.length-1].result['Email sent'] && newPermits.items) {
+                newReceipt.addOutputRequest(new Date(), oldReceipt.outputRequests[oldReceipt.outputRequests.length-1].sheetFormat, oldReceipt.provider.emailAddress, 'devUpdated');
+                await this.executeOutputRequest(newReceipt, newPermits)
+                oldReceipt.outputRequests.push(newReceipt.outputRequests[0])
+            };
+            
+            // receipt 업데이트
+            oldReceipt.itemArray = newReceipt.itemArray;
+            oldReceipt.readFromReceipt = newReceipt.readFromReceipt;
+            await oldReceipt.save();
+
+            await acc;
+            return new Promise(async (resolve, reject) => {
+                try {
+                    if (newFailures.length > 0) {
+                        readFailuresSaveArray.push([newFailures, newPermits, annotate_response.imageAddress, annotate_response._id, oldReceipt._id]);
+                        resolve();
+                    };
+                    resolve();
+                } catch (error) {
+                    reject(error);
+                };
+            });
+        }, Promise.resolve());
+
+        // readFailures 날리기
+        await this.readFailureModel.deleteMany({}).exec();
+
+        // readFailures 저장
+        await readFailuresSaveArray.reduce(async (acc, [newFailures, newPermits, imageAddress, annotate_response_id, receipt_id]) => {
+            await acc;
+            return this.saveFailures(newFailures, newPermits, imageAddress, annotate_response_id, receipt_id);
+        }, Promise.resolve());
     };
 
 
@@ -489,6 +530,8 @@ export class ReciptToSheetService {
      * - 기존에 failures 없던것 : 문제 생기는지 탐색
      * - 기존에 failures 있던것 : 새로이 해결된 경우가 있어야함 (그것들은 후에 따로 처리(expected 업데이트해주기)해야함)
      * 
+     * - 에러핸들링 손보기
+     * 
      * #### response
      * - failures 없던것(noFailureImages) 성공 몇개, 문제발생 몇개, 문제발생이미지주소배열
      * - failures 있던것(failureImages) 문제있음 몇개, 문제제거 몇개, 문제제거이미지주소배열
@@ -647,6 +690,8 @@ export class ReciptToSheetService {
 
     /**
      * #### getVersion 의 Get 으로 imageAddresses 들로 DB 에서 AnnoRes 받아와서 Expected 로컬에 쓰기
+     * 
+     * - 에러핸들링 손보기
      */
     async overwriteExpectedByGet(getVersion: string, imageAddresses: string[]) {
         const getReceipt = this.loadGet(getVersion);
@@ -660,7 +705,7 @@ export class ReciptToSheetService {
                 receiptStyle: providerInput.receiptStyle? providerInput.receiptStyle : 'notProvided',
             };
 
-            const {receipt, failures, permits} = getReceipt(annoRes, reqBody, imageAddress);
+            const {receipt} = getReceipt(annoRes, reqBody, imageAddress);
 
             const data = "export = " + JSON.stringify(receipt, null, 4);
             return writeFile(`src/googleVisionAnnoLab/expectReceipt/${providerInput.receiptStyle}/${uriPathConverter.toPath(imageAddress)}.ts`, data, 'utf8');
