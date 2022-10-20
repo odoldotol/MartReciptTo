@@ -3,7 +3,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AppController } from './app/app.controller';
 import { AppService } from './app/app.service';
-import { ReciptToSheetModule } from './recipt-to-sheet/recipt-to-sheet.module';
+import { LabModule } from './lab/lab.module';
+import { ReciptToSheetModule } from './receipt-to-sheet/recipt-to-sheet.module';
 
 @Module({
   imports: [
@@ -18,7 +19,8 @@ import { ReciptToSheetModule } from './recipt-to-sheet/recipt-to-sheet.module';
       }),
       inject: [ConfigService],
     }),
-    ReciptToSheetModule
+    ReciptToSheetModule,
+    LabModule,
   ],
   controllers: [AppController],
   providers: [AppService],

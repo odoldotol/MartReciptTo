@@ -1,5 +1,5 @@
-import getReceiptObject from '../receiptObj/get.V0.2.1';
-import googleVisionAnnoInspectorPipe from '../googleVisionAnnoPipe/inspector.V0.0.1';
+import * as receiptObject from '../receiptObj';
+import googleVisionAnnoInspectorPipe from '../receiptObj/googleVisionAnnoPipe/inspector.V0.0.1';
 import { readFileSync, writeFile } from 'fs';
 import uriPathConverter from '../util/uriPathConverter';
 import imageUriArray from './homeplusUriArray';
@@ -16,9 +16,18 @@ const annotateResult = JSON.parse(readFileSync(`src/googleVisionAnnoLab/annotate
 
 const multipartBody = JSON.parse(readFileSync(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${receiptId}-body.ts`, 'utf8').slice(9));
 
+// 0.2.1 이전
+/*
 const {receipt} = getReceiptObject(
     googleVisionAnnoInspectorPipe(annotateResult),
     multipartBody
+);
+*/
+
+const {receipt} = receiptObject.get_V0_2_1(
+    annotateResult,
+    multipartBody,
+    imageUriArray[imageUriIndex]
 );
 
 const data = "export = " + JSON.stringify(receipt, null, 4);

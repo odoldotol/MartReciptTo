@@ -1,31 +1,30 @@
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ImageAnnotatorClient } from '@google-cloud/vision';
 import {Storage} from '@google-cloud/storage';
 import credentials from '../../credential.json';
 import sgMail from '@sendgrid/mail';
 import { ConfigService } from '@nestjs/config';
 import xlsx from 'xlsx'
-import googleVisionAnnoInspectorPipe from '../googleVisionAnnoPipe/inspector.V0.0.1';
-import getReceiptObject from '../receiptObj/get.V0.1.1';
+import googleVisionAnnoInspectorPipe from '../receiptObj/googleVisionAnnoPipe/inspector.V0.0.1';
+import * as receiptObject from '../receiptObj';
 import { MultipartBodyDto } from './dto/multipartBody.dto';
-import { writeFile } from 'fs';
 import { v4 as uuidv4 } from 'uuid'
-import { Receipt } from '../receiptObj/define.V0.1.1'
+import { Receipt } from '../receiptObj/define.V0.1.1' // Receipt Version
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Receipt as ReceiptSchemaClass, ReceiptDocument } from './schemas/receipt.schema';
 import { Annotate_response, Annotate_responseDocument } from './schemas/annotate_response.schema';
 import { Read_failure, Read_failureDocument } from './schemas/read_failure.schema';
 import convert from 'heic-convert';
-import uriPathConverter from '../util/uriPathConverter';
 
 @Injectable()
 export class ReciptToSheetService {
 
-    private imageAnnotatorClient: ImageAnnotatorClient
-    private sgMail
-    private googleCloudStorage: Storage
-    private bucketName: string
+    private readonly imageAnnotatorClient: ImageAnnotatorClient
+    private readonly sgMail
+    private readonly googleCloudStorage: Storage
+    private readonly bucketName: string
+    private readonly getReceiptObject
 
     constructor(
         private readonly configService: ConfigService,
@@ -36,6 +35,7 @@ export class ReciptToSheetService {
         this.imageAnnotatorClient = new ImageAnnotatorClient({credentials});
         this.sgMail = sgMail.setApiKey(this.configService.get('SENDGRID_API_KEY'))
         this.googleCloudStorage = new Storage({credentials});
+
         if (this.configService.get('MONGO_database') === "receiptTo") {
             this.bucketName = "receipt-image-dev"
         }
@@ -45,11 +45,13 @@ export class ReciptToSheetService {
         else {
             console.log('MONGO_database: ', this.configService.get('MONGO_database'))
             throw new InternalServerErrorException("failed to set bucketName")
-        }
-    }
+        };
+
+        this.getReceiptObject = receiptObject.get_V0_2_1; // Receipt Version
+    };
 
     /**
-     * 
+     * FE
      */
     async processingReceiptImage(reciptImage: Express.Multer.File) { 
         // heic 형식일 경우 jpeg 로 변환 // 폰에서는 자동변환되는것같다?
@@ -79,7 +81,7 @@ export class ReciptToSheetService {
     };
 
     /**
-     * 
+     * BE Main
      */
     async processingAnnoRes(annoRes, imageUri: string, multipartBody: MultipartBodyDto, requestDate: Date) {
 
@@ -111,11 +113,15 @@ export class ReciptToSheetService {
         1. 어디 영수증인지 알아내기 -> 일단, 이 부분 무시하고 홈플러스 라고 가정
         2. 홈플러스 솔루션으로 text 추출하여 영수증객체 만들기
         */
-        const {receipt, failures, permits} = getReceiptObject(
+        // 0.2.1 이전
+        /*
+        const {receipt, failures, permits} = this.getReceiptObject(
             googleVisionAnnoInspectorPipe(annoRes), // 파이프 돌릴떄의 발견되는 예외도 보고 받을수 있도록 수정해야함
             multipartBody,
             imageUri
         );
+        */
+        const {receipt, failures, permits} = this.getReceiptObject(annoRes, multipartBody, imageUri);
 
         // 출력 요청 만들어서 영수증 객체에 넣기
         const requestType = 'provided'
@@ -134,24 +140,6 @@ export class ReciptToSheetService {
         };
 
         return {receipt, permits, saveResult_Failures};
-    };
-
-    /**
-     * 
-     */
-    async sendGoogleVisionAnnotateResultToLabs(reciptImage: Express.Multer.File, multipartBody: MultipartBodyDto) {
-        
-        const {receiptStyle, labsReceiptNumber} = multipartBody;
-        if (!receiptStyle || !labsReceiptNumber) {
-            throw new BadRequestException('receiptStyle or labsReceiptNumber is not available')
-        }
-        const annotateResult = await this.annotateImage(reciptImage);
-
-        let data = "export = " + JSON.stringify(annotateResult, null, 4);
-        writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}.ts`, data, () => { console.log("WRITED: an annotateResult file"); });
-
-        data = "export = " + JSON.stringify(multipartBody, null, 4);
-        writeFile(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${labsReceiptNumber}-body.ts`, data, () => { console.log("WRITED: a multipartBody file"); });
     };
 
     /**
@@ -219,7 +207,7 @@ export class ReciptToSheetService {
         if (permits.items) {
             // Sheet 만들기 (csv | xlsx) -> attachments 만들기
             const attachments = this.createAttachments(receipt);
-            
+
             // 이메일 보내기
             email = await this.sendEmail(attachments, receipt);
         }
@@ -277,7 +265,7 @@ export class ReciptToSheetService {
     createAttachments(receipt: Receipt) {
         const sheetFormat = receipt.outputRequests[receipt.outputRequests.length-1].sheetFormat;
         let attachment
-        const date = receipt.readFromReceipt.date
+        const date = receipt.readFromReceipt.date? receipt.readFromReceipt.date : new Date(undefined);
         if (sheetFormat === 'csv') {
             // let csvData = "0,1,2,3,4,5,6,7,8,9\n"
             // textArr[0] = '"'+textArr[0]+'"'
@@ -339,7 +327,7 @@ export class ReciptToSheetService {
      * 
      */
     async sendEmail(attachments, receipt: Receipt) {
-        const date = receipt.readFromReceipt.date
+        const date = receipt.readFromReceipt.date? receipt.readFromReceipt.date : new Date(undefined);
         const msg = {
             to: receipt.outputRequests[receipt.outputRequests.length-1].emailAddress, // recipient
             from: 'service.lygo@gmail.com', // verified sender
@@ -396,28 +384,4 @@ export class ReciptToSheetService {
     deleteImageInGCS(filename) {
         return this.googleCloudStorage.bucket(this.bucketName).file(filename).delete()
     };
-
-    /**
-     * 이미지uri 로 데이터베이스를 뒤져서 annoRes 와 요청 body(복원된) 를 파일로 저장한다.
-     */
-    async writeAnnoResByImageUri(body: {imageUri: string}) {
-        const imageUri = body.imageUri
-
-        const {provider, providerInput, annotate_responseId, outputRequests} = await this.receiptModel.findOne({imageAddress: imageUri}, 'provider providerInput annotate_responseId outputRequests').exec()
-        const {response: annoRes} = await this.annotateResponseModel.findById(annotate_responseId, 'response').exec()
-        
-        const reqBody = {
-            emailAddress: provider.emailAddress,
-            sheetFormat: outputRequests[0].sheetFormat,
-            receiptStyle: providerInput.receiptStyle
-        }
-
-        const imageUriFilePath = uriPathConverter.toPath(imageUri)
-
-        let data = "export = " + JSON.stringify(annoRes, null, 4);
-        writeFile(`src/googleVisionAnnoLab/annotateResult/${reqBody.receiptStyle}/${imageUriFilePath}.ts`, data, () => { console.log("WRITED: an annotateResult file"); });
-
-        data = "export = " + JSON.stringify(reqBody, null, 4);
-        writeFile(`src/googleVisionAnnoLab/annotateResult/${reqBody.receiptStyle}/${imageUriFilePath}-body.ts`, data, () => { console.log("WRITED: a multipartBody file"); });
-    };
-};
+}

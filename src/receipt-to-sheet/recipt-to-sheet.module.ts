@@ -15,6 +15,7 @@ import { Receipt, ReceiptSchema } from './schemas/receipt.schema';
     ])
   ],
   controllers: [ReciptToSheetController],
-  providers: [ReciptToSheetService]
+  providers: [ReciptToSheetService],
+  exports: [MongooseModule, ReciptToSheetService]
 })
 export class ReciptToSheetModule {}

@@ -9,8 +9,11 @@ export class ReciptToSheetController {
     constructor(
         private readonly configService: ConfigService,
         private readonly reciptToSheetService: ReciptToSheetService
-    ) {}
+    ) {};
     
+    /**
+     * #### 메인
+     */
     @Post()
     @UseInterceptors(FileInterceptor('receiptImage'/*, {options} */))
     async processingTransferredReceipt(@UploadedFile() reciptImage: Express.Multer.File, @Body() multipartBody: MultipartBodyDto) { // 지금은 단일 이미지만 처리한다. 추후에는 여러 영수증이미지를 받아서 처리할 수 있도록 하자.
@@ -26,15 +29,4 @@ export class ReciptToSheetController {
         // BE
         return this.reciptToSheetService.processingAnnoRes(annoRes, imageUri, multipartBody, requestDate); // imageUri 는 나중에 body 로 들어온다
     };
-
-    // @Post('lab')
-    // @UseInterceptors(FileInterceptor('receiptImage'/*, {options} */))
-    // sendGoogleVisionAnnotateResultToLabs(@UploadedFile() reciptImage: Express.Multer.File, @Body() multipartBody: MultipartBodyDto) {
-    //     return this.reciptToSheetService.sendGoogleVisionAnnotateResultToLabs(reciptImage, multipartBody);
-    // };
-
-    @Post('lab/write-annores')
-    async writeAnnoResByImageUri(@Body() body) {
-        return this.reciptToSheetService.writeAnnoResByImageUri(body);
-    };
-};
+}

@@ -1,5 +1,5 @@
-import getReceiptObject from '../receiptObj/get.V0.2.1';
-import googleVisionAnnoInspectorPipe from '../googleVisionAnnoPipe/inspector.V0.0.1';
+import * as receiptObject from '../receiptObj';
+import googleVisionAnnoInspectorPipe from '../receiptObj/googleVisionAnnoPipe/inspector.V0.0.1';
 import { readFileSync } from 'fs';
 import uriPathConverter from '../util/uriPathConverter';
 import imageUriArray from './homeplusUriArray';
@@ -7,6 +7,8 @@ import imageUriArray from './homeplusUriArray';
 /* ------------------------------------------------------------------ */
 const receiptStyle = "homeplus"; //
 /* ------------------------------------------------------------------ */
+
+// 새로 만든 비교 솔루션 적용하기
 
 const resultArray = []
 let resultMessageArray = [[],[],[]]
@@ -20,10 +22,14 @@ while (true) {
         const multipartBody = JSON.parse(readFileSync(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${receiptNumber}-body.ts`, 'utf8').slice(9));
         const expectReceipt = JSON.parse(readFileSync(`src/googleVisionAnnoLab/expectReceipt/${receiptStyle}/${receiptNumber}.ts`, 'utf8').slice(9));
 
+        // 0.2.1 이전
+        /*
         const {receipt} = getReceiptObject(
             googleVisionAnnoInspectorPipe(annotateResult),
             multipartBody
         );
+        */
+        const {receipt} = receiptObject.get_V0_2_1(annotateResult, multipartBody);
 
         const expectResult = expect(receipt, expectReceipt)
         // expect 만족하면
@@ -64,11 +70,15 @@ while (true) {
         const multipartBody = JSON.parse(readFileSync(`src/googleVisionAnnoLab/annotateResult/${receiptStyle}/${receiptId}-body.ts`, 'utf8').slice(9));
         const expectReceipt = JSON.parse(readFileSync(`src/googleVisionAnnoLab/expectReceipt/${receiptStyle}/${receiptId}.ts`, 'utf8').slice(9));
 
+        // 0.2.1 이전
+        /*
         const {receipt} = getReceiptObject(
             googleVisionAnnoInspectorPipe(annotateResult),
             multipartBody
         );
-
+        */
+        const {receipt} = receiptObject.get_V0_2_1(annotateResult, multipartBody);
+        
         const expectResult = expect(receipt, expectReceipt)
 
         // expect 만족하면
@@ -105,16 +115,16 @@ function expect(receiptObject, expectReceipt) {
     if (receiptObject.itemArray.length === expectReceipt.itemArray.length) {
         let message = ''
         receiptObject.itemArray.forEach((item, index) => {
-            const {productName, unuiPrice, quantity, amount} = item.readFromReceipt
+            const {productName, unitPrice, quantity, amount} = item.readFromReceipt
             const expectedProductName = expectReceipt.itemArray[index].readFromReceipt.productName
-            const expectedUnuiPrice = expectReceipt.itemArray[index].readFromReceipt.unuiPrice
+            const expectedUnitPrice = expectReceipt.itemArray[index].readFromReceipt.unitPrice
             const expectedQuantity = expectReceipt.itemArray[index].readFromReceipt.quantity
             const expectedAmount = expectReceipt.itemArray[index].readFromReceipt.amount
             if (productName !== expectedProductName) {
                 message += `\nIdx:${index}, productName: ${productName}, expected: ${expectedProductName}`
             }
-            if (unuiPrice !== expectedUnuiPrice) {
-                message += `\nIdx:${index}, unuiPrice: ${unuiPrice}, expected: ${expectedUnuiPrice}`
+            if (unitPrice !== expectedUnitPrice) {
+                message += `\nIdx:${index}, unitPrice: ${unitPrice}, expected: ${expectedUnitPrice}`
             }
             if (quantity !== expectedQuantity) {
                 message += `\nIdx:${index}, quantity: ${quantity}, expected: ${expectedQuantity}`
