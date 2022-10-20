@@ -1,4 +1,4 @@
-import getReceiptObject from '../receiptObj/get.V0.2.1';
+import * as receiptObject from '../receiptObj';
 import googleVisionAnnoInspectorPipe from '../receiptObj/googleVisionAnnoPipe/inspector.V0.0.1';
 import { readFileSync } from 'fs';
 import uriPathConverter from '../util/uriPathConverter';
@@ -27,7 +27,7 @@ while (true) {
             multipartBody
         );
         */
-        const {receipt} = getReceiptObject(annotateResult, multipartBody);
+        const {receipt} = receiptObject.get_V0_2_1(annotateResult, multipartBody);
 
         // const expectResult = expect(receiptObject, expectReceipt)
         // // expect 만족하면
@@ -75,7 +75,7 @@ while (true) {
             multipartBody
         );
         */
-        const {receipt} = getReceiptObject(annotateResult, multipartBody);
+        const {receipt} = receiptObject.get_V0_2_1(annotateResult, multipartBody);
 
         // const expectResult = expect(receipt, expectReceipt)
 

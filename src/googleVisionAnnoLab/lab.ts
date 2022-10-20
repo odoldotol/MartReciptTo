@@ -1,4 +1,4 @@
-import getReceiptObject from '../receiptObj/get.V0.2.1';
+import * as receiptObject from '../receiptObj';
 import googleVisionAnnoInspectorPipe from '../receiptObj/googleVisionAnnoPipe/inspector.V0.0.1';
 import { readFileSync, writeFile } from 'fs';
 import uriPathConverter from '../util/uriPathConverter';
@@ -21,6 +21,6 @@ const multipartBody = JSON.parse(readFileSync(`src/googleVisionAnnoLab/annotateR
 // writeFile(`src/googleVisionAnnoLab/fullTextAnnotationPlusStudy/${receiptStyle}/${receiptNumber}.ts`, data, () => { console.log("WRITED: a fullTextAnnotationPlusStudy file", receiptNumber); });
 
 
-const receiptObject = getReceiptObject(annotateResult, multipartBody);
+const receipt = receiptObject.get_V0_2_1(annotateResult, multipartBody);
 
-console.log(receiptObject);
+console.log(receipt);

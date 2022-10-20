@@ -24,7 +24,7 @@
 
 ## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+마트 영수증 이미지를 읽어보자..
 
 ## Installation
 
@@ -40,23 +40,10 @@ $ npm run start
 
 # watch mode
 $ npm run start:dev
-
-# production mode
-$ npm run start:prod
 ```
 
-## Test
-
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
+## GET 버젼 개발 가이드
+[GET Version Develop Guide](https://www.notion.so/lygorithm/GET-Version-Develop-Guide-b835a0f2e4114ec791e77ee2fd499214)
 
 ## Support
 
