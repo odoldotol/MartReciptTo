@@ -43,7 +43,7 @@ while (true) {
             console.log("FAIL: ", expectResult)
             resultMessageArray[1].push(`${receiptNumber}`)
         }
-    } catch (e) {
+    } catch (e: any) {
         if (e.code === 'ENOENT') {
             console.log(e.message)
             console.log('-------- Test Break --------')
@@ -92,7 +92,7 @@ while (true) {
             console.log("FAIL: ", expectResult)
             resultMessageArray[1].push(imageUriIndex)
         }
-    } catch (e) {
+    } catch (e: any) {
         if (e.code === 'ENOENT') {
             console.log(e.message)
             console.log('-------- Test Break --------')

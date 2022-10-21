@@ -201,7 +201,7 @@ export class LabService {
                             noFailureImages.success++
                             resolve()
                         };
-                    } catch (err) {
+                    } catch (err: any) {
                         reject(err.stack)
                     };
                 });
@@ -263,7 +263,7 @@ export class LabService {
                             failureImages.failure++
                             resolve()
                         };
-                    } catch (err) {
+                    } catch (err: any) {
                         reject(err.stack)
                     };
                 });
