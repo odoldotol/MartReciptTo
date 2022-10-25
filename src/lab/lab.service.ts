@@ -41,7 +41,33 @@ export class LabService {
     // 중복 기능이나 과정,절차들을 분리,재사용하도록 칼질하기
     
     /**
-     * 이미지uri 로 데이터베이스를 뒤져서 annoRes 와 요청 body(복원된) 를 파일로 저장한다.
+     * #### readFailures 조회하기
+     * - 필요시 갯수나 필터를 줄수있게 업뎃하면 좋겠다
+     */
+    async getReadFailures() {
+        try {
+            return await this.readFailureModel.find().exec()
+        } catch (err) {
+            throw new InternalServerErrorException(err)
+        };
+    };
+
+    /**
+     * #### receipt image
+     */
+    async downloadImage(imageFileName) {
+        const options = {
+            destination: "src/googleVisionAnnoLab/image/" + imageFileName,
+        };
+        try {
+            await this.reciptToSheetService.googleCloudStorage.bucket(this.reciptToSheetService.bucketName).file(imageFileName).download(options);
+        } catch (err) {
+            throw new InternalServerErrorException(err)
+        };
+    };
+
+    /**
+     * #### 이미지uri 로 데이터베이스를 뒤져서 annoRes 와 요청 body(복원된) 를 파일로 저장한다.
      */
     async writeAnnoResByImageAddress(imageAddress: string) {
         const {provider, providerInput, annotate_responseId, outputRequests} = await this.receiptModel.findOne({imageAddress}, 'provider providerInput annotate_responseId outputRequests').exec()

@@ -23,8 +23,8 @@ export class ReciptToSheetService {
 
     private readonly imageAnnotatorClient = new ImageAnnotatorClient({credentials});
     private readonly sgMail
-    private readonly googleCloudStorage = new Storage({credentials});
-    private readonly bucketName: string
+    readonly googleCloudStorage = new Storage({credentials});
+    readonly bucketName: string
     private readonly getReceiptObject = receiptObject.get_V0_2_1 // Receipt Version
 
     constructor(
@@ -33,7 +33,8 @@ export class ReciptToSheetService {
         @InjectModel(ReceiptSchemaClass.name) private receiptModel: Model<ReceiptDocument>,
         @InjectModel(Read_failure.name) private readFailureModel: Model<Read_failureDocument>,
     ) {
-        this.sgMail = sgMail.setApiKey(this.configService.get('SENDGRID_API_KEY'))
+        this.sgMail = sgMail.setApiKey(this.configService.get('SENDGRID_API_KEY'));
+
         if (this.configService.get('MONGO_database') === "receiptTo") {
             this.bucketName = "receipt-image-dev"
         }

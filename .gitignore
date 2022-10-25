@@ -46,4 +46,5 @@ credential.json
 /src/googleVisionAnnoLab/annotateResult
 /src/googleVisionAnnoLab/expectReceipt
 /src/googleVisionAnnoLab/fullTextAnnotationPlusStudy
+/src/googleVisionAnnoLab/image
 /src/receiptObj

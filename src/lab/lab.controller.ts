@@ -17,6 +17,23 @@ export class LabController {
     // };
 
     /**
+     * #### readFailures 조회
+     * - 필요시 갯수나 필터를 줄수있게 업뎃하면 좋겠다
+     */
+    @Get('readFailures')
+    getReadFailures() {
+        return this.labService.getReadFailures();
+    };
+
+    /**
+     * #### getImage
+     */
+    @Post('image')
+    getImage(@Body() body: {imageFileName: string}) {
+        return this.labService.downloadImage(body.imageFileName);
+    };
+
+    /**
      * #### 작업할 annoRes 를 로컬 LAB 으로 가져오기
      */
     @Post('write-annores')
