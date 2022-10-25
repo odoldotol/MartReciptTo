@@ -30,6 +30,8 @@
 
 ```bash
 $ npm install
+
+# .env & credential 세팅하기
 ```
 
 ## Running the app
