@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import mongoose from "mongoose";
-import { Provider, ReceiptItem, ReceiptReadFromReceipt, ProviderInput, OutputRequest } from "src/receiptObj/define.V0.1.1";
+import { Provider, ReceiptItem, ReceiptReadFromReceipt, ProviderInput, OutputRequest } from "src/receiptObject/define.V0.1.1";
 
 export type ReceiptDocument = Receipt & mongoose.Document;
 

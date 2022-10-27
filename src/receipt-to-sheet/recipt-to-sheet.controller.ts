@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MultipartBodyDto } from './dto/multipartBody.dto';
 import { ReciptToSheetService } from './recipt-to-sheet.service';
+import receiptDummy from './dummy/receipt';
+import failuresDummy from './dummy/failures';
 
 @Controller('receipt-to-sheet')
 export class ReciptToSheetController {
@@ -24,9 +26,23 @@ export class ReciptToSheetController {
             throw new UnauthorizedException();
         };
         const requestDate = new Date();
+
         // FE
         const {annoRes, imageUri} = await this.reciptToSheetService.processingReceiptImage(reciptImage);
+        
         // BE
         return this.reciptToSheetService.processingAnnoRes(annoRes, imageUri, multipartBody, requestDate); // imageUri 는 나중에 body 로 들어온다
+        
+        // Dummywork
+        // return {
+        //     receipt: receiptDummy,
+        //     permits: {
+        //         items: false,
+        //         receiptInfo: true,
+        //         shopInfo: true,
+        //         taxSummary: true
+        //     },
+        //     saveResult_Failures: failuresDummy
+        // };
     };
 }

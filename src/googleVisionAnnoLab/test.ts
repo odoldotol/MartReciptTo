@@ -1,5 +1,5 @@
-import * as receiptObject from '../receiptObj';
-import googleVisionAnnoInspectorPipe from '../receiptObj/googleVisionAnnoPipe/inspector.V0.0.1';
+import * as receiptObject from '../receiptObject';
+import googleVisionAnnoInspectorPipe from '../receiptObject/googleVisionAnnoPipe/inspector.V0.0.1';
 import { readFileSync } from 'fs';
 import uriPathConverter from '../util/uriPathConverter';
 import imageUriArray from './homeplusUriArray';

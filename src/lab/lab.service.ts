@@ -6,8 +6,8 @@ import { Annotate_response, Annotate_responseDocument } from '../receipt-to-shee
 import { Read_failure, Read_failureDocument } from '../receipt-to-sheet/schemas/read_failure.schema';
 import uriPathConverter from 'src/util/uriPathConverter';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
-import * as receiptObject from '../receiptObj';
-import { Receipt } from 'src/receiptObj/define.V0.1.1'; // Receipt Version
+import * as receiptObject from '../receiptObject';
+import { Receipt } from 'src/receiptObject/define.V0.1.1'; // Receipt Version
 import { ReciptToSheetService } from 'src/receipt-to-sheet/recipt-to-sheet.service';
 
 

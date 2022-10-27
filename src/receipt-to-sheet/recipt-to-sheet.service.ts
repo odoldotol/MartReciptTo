@@ -5,11 +5,11 @@ import credentials from '../../credential.json';
 import sgMail from '@sendgrid/mail';
 import { ConfigService } from '@nestjs/config';
 import xlsx from 'xlsx'
-import googleVisionAnnoInspectorPipe from '../receiptObj/googleVisionAnnoPipe/inspector.V0.0.1';
-import * as receiptObject from '../receiptObj';
+import googleVisionAnnoInspectorPipe from '../receiptObject/googleVisionAnnoPipe/inspector.V0.0.1';
+import * as receiptObject from '../receiptObject';
 import { MultipartBodyDto } from './dto/multipartBody.dto';
 import { v4 as uuidv4 } from 'uuid'
-import { Receipt } from '../receiptObj/define.V0.1.1' // Receipt Version
+import { Receipt } from '../receiptObject/define.V0.1.1' // Receipt Version
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Receipt as ReceiptSchemaClass, ReceiptDocument } from './schemas/receipt.schema';
