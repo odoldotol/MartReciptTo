@@ -30,8 +30,11 @@
 
 ```bash
 $ npm install
-
-# .env & credential 세팅하기
+```
+## .env & credential 세팅
+```
+관리자(odoldotol@gmail.com)에게 요청하기
+(DB 와 구글스토리지 읽기권한 제공)
 ```
 
 ## Running the app
