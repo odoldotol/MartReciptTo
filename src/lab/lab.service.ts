@@ -70,14 +70,20 @@ export class LabService {
      * #### 이미지uri 로 데이터베이스를 뒤져서 annoRes 와 요청 body(복원된) 를 파일로 저장한다.
      */
     async writeAnnoResByImageAddress(imageAddress: string) {
-        const {provider, providerInput, annotate_responseId, outputRequests} = await this.receiptModel.findOne({imageAddress}, 'provider providerInput annotate_responseId outputRequests').exec()
-        const {response: annoRes} = await this.annotateResponseModel.findById(annotate_responseId, 'response').exec()
-        
-        const reqBody = {
-            emailAddress: provider.emailAddress,
-            sheetFormat: outputRequests[0].sheetFormat,
-            receiptStyle: providerInput.receiptStyle? providerInput.receiptStyle : 'notProvided',
-        }
+        let reqBody
+        let annoRes
+        try {
+            const {provider, providerInput, annotate_responseId, outputRequests} = await this.receiptModel.findOne({imageAddress}, 'provider providerInput annotate_responseId outputRequests').exec();
+            ({response: annoRes} = await this.annotateResponseModel.findById(annotate_responseId, 'response').exec());
+            
+            reqBody = {
+                emailAddress: provider.emailAddress,
+                sheetFormat: outputRequests[0].sheetFormat,
+                receiptStyle: providerInput.receiptStyle? providerInput.receiptStyle : 'notProvided',
+            }
+        } catch (err) {
+            throw new InternalServerErrorException(err)
+        };
 
         const imageUriFilePath = uriPathConverter.toPath(imageAddress)
 
@@ -97,45 +103,49 @@ export class LabService {
      * - 이미 파일로 존재히는 이미지URI 라면 다운로드하지 않는다. (=기존의 것이 변경될수는 없다)
      */
     async downloadReceiptsToExpected() {
-        // 스타일 목록
-        const receiptStyles = await readdir('src/googleVisionAnnoLab/expectReceipt/')
+        try {
+            // 스타일 목록
+            const receiptStyles = await readdir('src/googleVisionAnnoLab/expectReceipt/')
 
-        // 필터만들기
-        // 스타일 별로 and 필터로 로컬 expected 에 없는것만 필터링하고 각각을 or 필터로 묶음
-        let filterOr = []
-        for (const receiptStyle of receiptStyles) {
-            let imageAddArr = await readdir(`src/googleVisionAnnoLab/expectReceipt/${receiptStyle}`)
-            imageAddArr = imageAddArr.map((fileName) => {
-                return uriPathConverter.toUri(fileName).slice(0, -3)
+            // 필터만들기
+            // 스타일 별로 and 필터로 로컬 expected 에 없는것만 필터링하고 각각을 or 필터로 묶음
+            let filterOr = []
+            for (const receiptStyle of receiptStyles) {
+                let imageAddArr = await readdir(`src/googleVisionAnnoLab/expectReceipt/${receiptStyle}`)
+                imageAddArr = imageAddArr.map((fileName) => {
+                    return uriPathConverter.toUri(fileName).slice(0, -3)
+                });
+                filterOr.push({$and: [{'providerInput.receiptStyle': receiptStyle},{imageAddress: {$nin: imageAddArr}}]},)
+            };
+            
+            // 로컬 expected 에 없는 영수증만 가져옴
+            const receipts = await this.receiptModel.find({$or: filterOr}, "providerInput imageAddress itemArray readFromReceipt").exec()
+
+            if (receipts.length === 0) {
+                return 'No new receipt to download to expected'
+            };
+
+            // expected 생성
+            const pathArr = []
+            const writeFilePromiseArr = receipts.map((receipt) => {
+                const imageUriFilePath = uriPathConverter.toPath(receipt.imageAddress)
+                const data = "export = " + JSON.stringify(receipt, null, 4);
+                return writeFile(`src/googleVisionAnnoLab/expectReceipt/${receipt.providerInput.receiptStyle}/${imageUriFilePath}.ts`, data)
+                .then(() => {
+                    pathArr.push(`${receipt.providerInput.receiptStyle}/${receipt.imageAddress}`)
+                    return
+                })
+                .catch(err => { console.log("WRITE ERROR: ", err); });
             });
-            filterOr.push({$and: [{'providerInput.receiptStyle': receiptStyle},{imageAddress: {$nin: imageAddArr}}]},)
-        };
-        
-        // 로컬 expected 에 없는 영수증만 가져옴
-        const receipts = await this.receiptModel.find({$or: filterOr}, "providerInput imageAddress itemArray readFromReceipt").exec()
 
-        if (receipts.length === 0) {
-            return 'No new receipt to download to expected'
-        };
-
-        // expected 생성
-        const pathArr = []
-        const writeFilePromiseArr = receipts.map((receipt) => {
-            const imageUriFilePath = uriPathConverter.toPath(receipt.imageAddress)
-            const data = "export = " + JSON.stringify(receipt, null, 4);
-            return writeFile(`src/googleVisionAnnoLab/expectReceipt/${receipt.providerInput.receiptStyle}/${imageUriFilePath}.ts`, data)
-            .then(() => {
-                pathArr.push(`${receipt.providerInput.receiptStyle}/${receipt.imageAddress}`)
-                return
-            })
-            .catch(err => { console.log("WRITE ERROR: ", err); });
-        });
-
-        await Promise.all(writeFilePromiseArr);
-        return {
-            path: pathArr,
-            count: pathArr.length
-        };
+            await Promise.all(writeFilePromiseArr);
+            return {
+                path: pathArr,
+                count: pathArr.length
+            };
+        } catch (err) {
+            throw new InternalServerErrorException(err)
+        }
     };
 
     /**
