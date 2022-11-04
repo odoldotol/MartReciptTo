@@ -1,10 +1,10 @@
 export default {
 
-    toPath: function(imageUri: string) {
+    toPath(imageUri: string) {
         return imageUri.replace(/\//g, '\\')
     },
 
-    toUri: function(imagePath: string) {
+    toUri(imagePath: string) {
         return imagePath.replace(/\\/g, '/')
     },
 

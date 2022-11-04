@@ -2,7 +2,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
-async function bootstrap() {
+const bootstrap = async () => { // async function bootstrap() {
   const app = await NestFactory.create(AppModule)
     .then(app => {
       console.log(`MongoDB Connected on ${process.env.MONGO_database}`);

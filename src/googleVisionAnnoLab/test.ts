@@ -8,12 +8,58 @@ import imageUriArray from './homeplusUriArray';
 const receiptStyle = "homeplus"; //
 /* ------------------------------------------------------------------ */
 
-// 새로 만든 비교 솔루션 적용하기
-
 const resultArray = []
 let resultMessageArray = [[],[],[]]
 
 let receiptNumber = 1
+
+// Todo: 새로 만든 비교 솔루션 적용하기
+const expect = (receipt, expectReceipt) => {
+    if (receipt.itemArray.length === expectReceipt.itemArray.length) {
+        let message = ''
+        receipt.itemArray.forEach((item, index) => {
+            const {productName, unitPrice, quantity, amount} = item.readFromReceipt
+            const expectedProductName = expectReceipt.itemArray[index].readFromReceipt.productName
+            const expectedUnitPrice = expectReceipt.itemArray[index].readFromReceipt.unitPrice
+            const expectedQuantity = expectReceipt.itemArray[index].readFromReceipt.quantity
+            const expectedAmount = expectReceipt.itemArray[index].readFromReceipt.amount
+            if (productName !== expectedProductName) {
+                message += `\nIdx:${index}, productName: ${productName}, expected: ${expectedProductName}`
+            }
+            if (unitPrice !== expectedUnitPrice) {
+                message += `\nIdx:${index}, unitPrice: ${unitPrice}, expected: ${expectedUnitPrice}`
+            }
+            if (quantity !== expectedQuantity) {
+                message += `\nIdx:${index}, quantity: ${quantity}, expected: ${expectedQuantity}`
+            }
+            if (amount !== expectedAmount) {
+                message += `\nIdx:${index}, amount: ${amount}, expected: ${expectedAmount}`
+            }
+            if (item.readFromReceipt.discountArray.length !== 0) {
+                item.readFromReceipt.discountArray.forEach((discount, discountIndex) => {
+                    const {name, amount} = discount
+                    const expectedName = expectReceipt.itemArray[index].readFromReceipt.discountArray[discountIndex].name
+                    const expectedAmount = expectReceipt.itemArray[index].readFromReceipt.discountArray[discountIndex].amount
+                    if (name !== expectedName) {
+                        message += `\nIdx:${index}, discountIndex:${discountIndex}, discountName: ${name}, expected: ${expectedName}`
+                    }
+                    if (amount !== expectedAmount) {
+                        message += `\nIdx:${index}, discountIndex:${discountIndex}, discountAmount: ${amount}, expected: ${expectedAmount}`
+                    }
+                })
+            }
+        })
+        if (message === '') {
+            return true
+        }
+        else {
+            return message
+        }
+    }
+    else {
+        return "itemArray.length is not equal"
+    }
+};
 
 while (true) {
     console.log("\n", receiptNumber)
@@ -110,50 +156,3 @@ console.log("PASS  : ", `${resultMessageArray[0].length}`, resultMessageArray[0]
 console.log("FAIL  : ", `${resultMessageArray[1].length}`, resultMessageArray[1]) //
 console.log("ERROR : ", `${resultMessageArray[2].length}`, resultMessageArray[2])
 console.log("Total : ", `${resultMessageArray[0].length + resultMessageArray[1].length + resultMessageArray[2].length}`, "\n")
-
-function expect(receiptObject, expectReceipt) {
-    if (receiptObject.itemArray.length === expectReceipt.itemArray.length) {
-        let message = ''
-        receiptObject.itemArray.forEach((item, index) => {
-            const {productName, unitPrice, quantity, amount} = item.readFromReceipt
-            const expectedProductName = expectReceipt.itemArray[index].readFromReceipt.productName
-            const expectedUnitPrice = expectReceipt.itemArray[index].readFromReceipt.unitPrice
-            const expectedQuantity = expectReceipt.itemArray[index].readFromReceipt.quantity
-            const expectedAmount = expectReceipt.itemArray[index].readFromReceipt.amount
-            if (productName !== expectedProductName) {
-                message += `\nIdx:${index}, productName: ${productName}, expected: ${expectedProductName}`
-            }
-            if (unitPrice !== expectedUnitPrice) {
-                message += `\nIdx:${index}, unitPrice: ${unitPrice}, expected: ${expectedUnitPrice}`
-            }
-            if (quantity !== expectedQuantity) {
-                message += `\nIdx:${index}, quantity: ${quantity}, expected: ${expectedQuantity}`
-            }
-            if (amount !== expectedAmount) {
-                message += `\nIdx:${index}, amount: ${amount}, expected: ${expectedAmount}`
-            }
-            if (item.readFromReceipt.discountArray.length !== 0) {
-                item.readFromReceipt.discountArray.forEach((discount, discountIndex) => {
-                    const {name, amount} = discount
-                    const expectedName = expectReceipt.itemArray[index].readFromReceipt.discountArray[discountIndex].name
-                    const expectedAmount = expectReceipt.itemArray[index].readFromReceipt.discountArray[discountIndex].amount
-                    if (name !== expectedName) {
-                        message += `\nIdx:${index}, discountIndex:${discountIndex}, discountName: ${name}, expected: ${expectedName}`
-                    }
-                    if (amount !== expectedAmount) {
-                        message += `\nIdx:${index}, discountIndex:${discountIndex}, discountAmount: ${amount}, expected: ${expectedAmount}`
-                    }
-                })
-            }
-        })
-        if (message === '') {
-            return true
-        }
-        else {
-            return message
-        }
-    }
-    else {
-        return "itemArray.length is not equal"
-    }
-};
