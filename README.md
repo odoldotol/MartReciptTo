@@ -61,7 +61,7 @@ src/
 clone 하기
 ```
 ## GET 버젼 개발 가이드
-[GET Version Develop Guide](https://www.notion.so/lygorithm/GET-Version-Develop-Guide-b835a0f2e4114ec791e77ee2fd499214)
+[GET Version Develop Guide](https://lygorithm.notion.site/GET-Version-Develop-Guide-b835a0f2e4114ec791e77ee2fd499214)
 
 ## Support
 
