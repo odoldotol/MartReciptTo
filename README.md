@@ -54,6 +54,7 @@ src/receipt-to-sheet/recipt-to-sheet.controller.ts 안에
 // Dummywork 아래 주석 제거.
 ```
 ## Receipt 객체 관련 함수 import
+[receiptObject](https://github.com/odoldotol/receiptObject)
 ```
 src/
 위치에서
