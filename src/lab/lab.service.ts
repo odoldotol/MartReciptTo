@@ -5,6 +5,7 @@ import { Receipt as ReceiptSchemaClass, ReceiptDocument } from '../receipt-to-sh
 import { Annotate_response, Annotate_responseDocument } from '../receipt-to-sheet/schemas/annotate_response.schema';
 import { Read_failure, Read_failureDocument } from '../receipt-to-sheet/schemas/read_failure.schema';
 import uriPathConverter from 'src/util/uriPathConverter';
+import annotateResponse from 'src/util/annotateResponse';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import * as receiptObject from '../receiptObject';
 import { Receipt } from 'src/receiptObject/define.V0.1.1'; // Receipt Version
@@ -71,10 +72,10 @@ export class LabService {
      */
     async writeAnnoResByImageAddress(imageAddress: string) {
         let reqBody
-        let annoRes
+        let encodedBinAnnoRes
         try {
             const {provider, providerInput, annotate_responseId, outputRequests} = await this.receiptModel.findOne({imageAddress}, 'provider providerInput annotate_responseId outputRequests').exec();
-            ({response: annoRes} = await this.annotateResponseModel.findById(annotate_responseId, 'response').exec());
+            ({response: encodedBinAnnoRes} = await this.annotateResponseModel.findById(annotate_responseId, 'response').exec());
             
             reqBody = {
                 emailAddress: provider.emailAddress,
@@ -85,9 +86,11 @@ export class LabService {
             throw new InternalServerErrorException(err)
         };
 
+        const decodedAnnoRes = annotateResponse.decoder(encodedBinAnnoRes);
+
         const imageUriFilePath = uriPathConverter.toPath(imageAddress)
 
-        let data = "export = " + JSON.stringify(annoRes, null, 4);
+        let data = "export = " + JSON.stringify(decodedAnnoRes, null, 4);
         writeFile(`src/googleVisionAnnoLab/annotateResult/${reqBody.receiptStyle}/${imageUriFilePath}.ts`, data)
         .then(() => { console.log("WRITED: an annotateResult file"); })
         .catch(err => { console.log("WRITE ERROR: ", err); });
@@ -184,23 +187,33 @@ export class LabService {
             failuresWithPermitChange: []
         }
 
-        // annoRes 가져오는거 너무 오래걸림!!
-        const annoResNoFailuresArr = await this.annotateResponseModel.find({_id: {$nin: failAnnoResIdArr}}, 'imageAddress response').exec();
-        const annoResFailuresArr = await this.annotateResponseModel.find({_id: {$in: failAnnoResIdArr}}, 'imageAddress response').exec();
+        // encoding 으로도 속도가 거슬리면 일정 갯수씩 끈어서 진행하면 더 빨라질것같은데? 몇개씩 가져와진것 부터 작업하면 되니깐. 아차피 한번에 다 하는것은 영수증 1000조개 되면 안되는거잖아? 요청수와 한번에 처리하는갯수사이의 스윗스팟?
+        const encodedBinAnnoResDocNoFailuresArr = await this.annotateResponseModel.find({_id: {$nin: failAnnoResIdArr}}, 'imageAddress response').exec();
+        const encodedBinAnnoResDocFailuresArr = await this.annotateResponseModel.find({_id: {$in: failAnnoResIdArr}}, 'imageAddress response').exec();
+
+        // decode
+        const annoResDocNoFailuresArr = encodedBinAnnoResDocNoFailuresArr.map((encodedBinAnnoResDoc) => {
+            encodedBinAnnoResDoc.response = annotateResponse.decoder(encodedBinAnnoResDoc.response)
+            return encodedBinAnnoResDoc
+        });
+        const annoResDocFailuresArr = encodedBinAnnoResDocFailuresArr.map((encodedBinAnnoResDoc) => {
+            encodedBinAnnoResDoc.response = annotateResponse.decoder(encodedBinAnnoResDoc.response)
+            return encodedBinAnnoResDoc
+        });
 
         // testOn
-        testOn.total = annoResNoFailuresArr.length + annoResFailuresArr.length
-        testOn.noFailures = annoResNoFailuresArr.length
-        testOn.failures = annoResFailuresArr.length
+        testOn.total = annoResDocNoFailuresArr.length + annoResDocFailuresArr.length
+        testOn.noFailures = annoResDocNoFailuresArr.length
+        testOn.failures = annoResDocFailuresArr.length
 
         await Promise.all([
             // 기존에 failures 없던것 (noFailureImages)
-            await annoResNoFailuresArr.reduce(async (acc, annoRes) => {
-                const {provider, providerInput} = await this.receiptModel.findOne({imageAddress: annoRes.imageAddress}, 'provider providerInput').exec();
-                const {receipt, failures, permits} = testGet(annoRes.response, {emailAddress: provider.emailAddress, receiptStyle: providerInput.receiptStyle}, annoRes.imageAddress);
+            await annoResDocNoFailuresArr.reduce(async (acc, annoResDoc) => {
+                const {provider, providerInput} = await this.receiptModel.findOne({imageAddress: annoResDoc.imageAddress}, 'provider providerInput').exec();
+                const {receipt, failures, permits} = testGet(annoResDoc.response, {emailAddress: provider.emailAddress, receiptStyle: providerInput.receiptStyle}, annoResDoc.imageAddress);
                 
                 // receipt 차이점 있으면 or failures 있으면 or permits 에 false 있으면 newFailure 에 추가
-                const expected = JSON.parse((await readFile(`src/googleVisionAnnoLab/expectReceipt/${providerInput.receiptStyle}/${uriPathConverter.toPath(annoRes.imageAddress)}.ts`, 'utf8')).slice(9));
+                const expected = JSON.parse((await readFile(`src/googleVisionAnnoLab/expectReceipt/${providerInput.receiptStyle}/${uriPathConverter.toPath(annoResDoc.imageAddress)}.ts`, 'utf8')).slice(9));
                 const difference = this.compareReceiptToExpected(
                     receipt,
                     expected
@@ -230,8 +243,8 @@ export class LabService {
                     try {
                         if (newFailureTest) {
                             noFailureImages.newFailure++
-                            detail.newFailureImageAddresses.push(annoRes.imageAddress)
-                            detail.newFailures.push({imageAddress: annoRes.imageAddress, permits, failures, difference})
+                            detail.newFailureImageAddresses.push(annoResDoc.imageAddress)
+                            detail.newFailures.push({imageAddress: annoResDoc.imageAddress, permits, failures, difference})
                             resolve()
                         } else {
                             noFailureImages.success++
@@ -244,7 +257,7 @@ export class LabService {
             }, Promise.resolve()),
 
             // 기존에 failures 있던것 (failureImages)
-            await annoResFailuresArr.reduce(async (acc, annoRes) => {
+            await annoResDocFailuresArr.reduce(async (acc, annoRes) => {
                 const {provider, providerInput} = await this.receiptModel.findOne({imageAddress: annoRes.imageAddress}, 'provider providerInput').exec();
                 const {receipt, failures, permits} = testGet(annoRes.response, {emailAddress: provider.emailAddress, receiptStyle: providerInput.receiptStyle}, annoRes.imageAddress);
 
@@ -320,8 +333,11 @@ export class LabService {
         const getReceipt = this.loadGet(getVersion);
         return await Promise.all(imageAddresses.map(async (imageAddress) => {
             const {provider, providerInput, annotate_responseId, outputRequests} = await this.receiptModel.findOne({imageAddress}, 'provider providerInput annotate_responseId outputRequests').exec();
-            const {response: annoRes} = await this.annotateResponseModel.findById(annotate_responseId, 'response').exec();
+            const {response: encodedBinAnnoRes} = await this.annotateResponseModel.findById(annotate_responseId, 'response').exec();
             
+            // decode
+            const annoRes = annotateResponse.decoder(encodedBinAnnoRes);
+
             const reqBody = {
                 emailAddress: provider.emailAddress,
                 sheetFormat: outputRequests[0].sheetFormat,
@@ -348,11 +364,18 @@ export class LabService {
      */
     async updateGet(getVersion: string) {
         const getReceipt = this.loadGet(getVersion);
-        const annotate_responses = await this.annotateResponseModel.find().exec();
+        const encodedBinAnnoResDocArr = await this.annotateResponseModel.find().exec();
+
+        // decode
+        const annoResDocArr = encodedBinAnnoResDocArr.map((encodedBinAnnoResDoc) => {
+            encodedBinAnnoResDoc.response = annotateResponse.decoder(encodedBinAnnoResDoc.response)
+            return encodedBinAnnoResDoc
+        });
+
         const readFailuresSaveArray = [];
-        await annotate_responses.reduce(async (acc, annotate_response) => {
-            const oldReceipt = await this.receiptModel.findOne({imageAddress: annotate_response.imageAddress}).exec();
-            const {receipt: newReceipt, failures: newFailures, permits: newPermits} = getReceipt(annotate_response.response, {emailAddress: oldReceipt.provider.emailAddress, receiptStyle: oldReceipt.providerInput.receiptStyle}, annotate_response.imageAddress);
+        await annoResDocArr.reduce(async (acc, annoResDoc) => {
+            const oldReceipt = await this.receiptModel.findOne({imageAddress: annoResDoc.imageAddress}).exec();
+            const {receipt: newReceipt, failures: newFailures, permits: newPermits} = getReceipt(annoResDoc.response, {emailAddress: oldReceipt.provider.emailAddress, receiptStyle: oldReceipt.providerInput.receiptStyle}, annoResDoc.imageAddress);
             // permits.items 이 true 인데 최신 outputRequest 가 실패인 경우 새로운 outputRequest 생성하고 실행!
             if (!oldReceipt.outputRequests[oldReceipt.outputRequests.length-1].result['Email sent'] && newPermits.items) {
                 newReceipt.addOutputRequest(new Date(), oldReceipt.outputRequests[oldReceipt.outputRequests.length-1].sheetFormat, oldReceipt.provider.emailAddress, 'devUpdated');
@@ -369,7 +392,7 @@ export class LabService {
             return new Promise(async (resolve, reject) => {
                 try {
                     if (newFailures.length > 0) {
-                        readFailuresSaveArray.push([newFailures, newPermits, annotate_response.imageAddress, annotate_response._id, oldReceipt._id]);
+                        readFailuresSaveArray.push([newFailures, newPermits, annoResDoc.imageAddress, annoResDoc._id, oldReceipt._id]);
                         resolve();
                     };
                     resolve();
@@ -486,4 +509,36 @@ export class LabService {
 
         return difference
     };
+
+    /**
+     * 
+     */
+    async encodeAllAnnoRes() {
+        try {
+            const annoResArray = await this.annotateResponseModel.find().exec();
+
+            await Promise.all(annoResArray.map(async (annoRes) => {
+                annoRes.response = annotateResponse.encoder(annoRes.response)
+                await annoRes.save()
+            }));
+        } catch (error) {
+            throw new InternalServerErrorException(error)
+        }
+    };
+
+    /**
+     * 
+     */
+    async resetAllAnnoRes() {
+        try {
+            const annoResArray = await this.annotateResponseModel.find().exec();
+
+            await Promise.all(annoResArray.map(async (annoRes) => {
+                annoRes.response = annotateResponse.encoder(await this.reciptToSheetService.annotateGscImage(annoRes.imageAddress));
+                await annoRes.save()
+            }));
+        } catch (error) {
+            throw new InternalServerErrorException(error)
+        }
+    }
 }

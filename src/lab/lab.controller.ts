@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { LabService } from './lab.service';
 
 @Controller('lab')
@@ -74,5 +74,25 @@ export class LabController {
     @Post('update-get')
     updateGet(@Query('getVersion') getVersion: string) {
         return this.labService.updateGet(getVersion);
+    };
+
+    /**
+     * #### DB 에 모든 annoRes.response 를 encode 하기
+     * 
+     * - 현재, 여러번 실행해도 데이터를 망가트리고도 그냥 계속 실행되는 문제가 있음.
+     */
+    @Patch('encode-all-annores')
+    encodeAllAnnoRes() {
+        return this.labService.encodeAllAnnoRes();
+    };
+
+    /**
+     * #### DB 에 모든 annoRes.response 를 하드리셋
+     * 
+     * - 이미지 주소를 바탕으로 모두 다시 읽어서 annoRes.response 를 만든다.
+     */
+    @Put('reset-all-annores')
+    resetAllAnnoRes() {
+        return this.labService.resetAllAnnoRes();
     };
 }

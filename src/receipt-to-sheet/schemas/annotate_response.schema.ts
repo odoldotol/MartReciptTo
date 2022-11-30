@@ -18,7 +18,7 @@ export class Annotate_response {
         type: Array<Object>, Object,
         required: true
     })
-    response: [google.cloud.vision.v1.IAnnotateImageResponse] | object
+    response: google.cloud.vision.v1.IAnnotateImageResponse[] | Uint8Array[];
 }
 
 export const Annotate_responseSchema = SchemaFactory.createForClass(Annotate_response);

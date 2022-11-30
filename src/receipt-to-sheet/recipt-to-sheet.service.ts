@@ -17,6 +17,7 @@ import { Annotate_response, Annotate_responseDocument } from './schemas/annotate
 import { Read_failure, Read_failureDocument } from './schemas/read_failure.schema';
 import convert from 'heic-convert';
 import { google } from '@google-cloud/vision/build/protos/protos';
+import annotateResponse from 'src/util/annotateResponse';
 
 @Injectable()
 export class ReciptToSheetService {
@@ -182,7 +183,7 @@ export class ReciptToSheetService {
     async saveAnnoRes(response: google.cloud.vision.v1.IAnnotateImageResponse[], imageAddress: string) {
         const newAnnotateResponse = new this.annotateResponseModel({
             imageAddress,
-            response
+            response: annotateResponse.encoder(response)
         })
         let result
         await newAnnotateResponse.save()
