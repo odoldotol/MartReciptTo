@@ -187,7 +187,7 @@ export class LabService {
             failuresWithPermitChange: []
         }
 
-        // encoding 으로도 속도가 거슬리면 일정 갯수씩 끈어서 진행하면 더 빨라질것같은데? 몇개씩 가져와진것 부터 작업하면 되니깐. 아차피 한번에 다 하는것은 영수증 1000조개 되면 안되는거잖아? 요청수와 한번에 처리하는갯수사이의 스윗스팟?
+        // 추후에 일정 갯수씩 끈어서 진행하도록 수정하기. 몇개씩 가져와진것 부터 작업하도록하기. 아차피 한번에 다 하는것은 영수증 1000조개 쌓이면 못하는거. 요청수와 한번에 처리하는갯수사이의 스윗스팟?
         const encodedBinAnnoResDocNoFailuresArr = await this.annotateResponseModel.find({_id: {$nin: failAnnoResIdArr}}, 'imageAddress response').exec();
         const encodedBinAnnoResDocFailuresArr = await this.annotateResponseModel.find({_id: {$in: failAnnoResIdArr}}, 'imageAddress response').exec();
 
