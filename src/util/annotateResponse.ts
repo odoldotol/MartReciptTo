@@ -1,6 +1,6 @@
 import { google } from '@google-cloud/vision/build/protos/protos';
 
-const AnnotateImageResponse = google.cloud.vision.v1.AnnotateImageResponse;
+const AIR = google.cloud.vision.v1.AnnotateImageResponse;
 
 export default {
 
@@ -10,7 +10,7 @@ export default {
     encoder(annotateResponse/*: google.cloud.vision.v1.IAnnotateImageResponse[] */) {
 
         return annotateResponse.map((ele) => {
-            ele = AnnotateImageResponse.toObject(ele, {
+            ele = AIR.toObject(ele, {
                 longs: String,
                 enums: String,
                 bytes: Array,
@@ -20,9 +20,9 @@ export default {
                 oneofs: true,
                 json: true
             });
-            const verify = AnnotateImageResponse.verify(ele)
+            const verify = AIR.verify(ele)
             if (verify === null) {
-                return AnnotateImageResponse.encodeDelimited(ele).finish();
+                return AIR.encodeDelimited(ele).finish();
             } else {
                 throw new Error(verify);
             };
@@ -36,7 +36,7 @@ export default {
 
         return encodedBinAnnotateResponse.map((ele) => {
             if (Buffer.isBuffer(ele.buffer)) {
-                return AnnotateImageResponse.toObject(AnnotateImageResponse.decodeDelimited(ele.buffer), {
+                return AIR.toObject(AIR.decodeDelimited(ele.buffer), {
                     longs: String,
                     enums: String,
                     bytes: Array,

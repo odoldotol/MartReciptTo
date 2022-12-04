@@ -251,7 +251,7 @@ export class LabService {
                             resolve()
                         };
                     } catch (err: any) {
-                        reject(err.stack)
+                        reject(err)
                     };
                 });
             }, Promise.resolve()),
@@ -313,7 +313,7 @@ export class LabService {
                             resolve()
                         };
                     } catch (err: any) {
-                        reject(err.stack)
+                        reject(err)
                     };
                 });
             }, Promise.resolve())
@@ -429,85 +429,91 @@ export class LabService {
      * - 중복코드 제거
      */
     compareReceiptToExpected(receipt: Receipt, expected) {
-        const difference = []
-        // imageAddress 다르면 종료
-        if (receipt.imageAddress !== expected.imageAddress) {
-            difference.push({key: 'imageAddress', receipt: receipt.imageAddress, expected: expected.imageAddress})
-            return difference;
-        };
-
-        // items 비교
-        const receiptItemLength = receipt.itemArray.length
-        const expectedItemLength = expected.itemArray.length
-        if (receiptItemLength !== expectedItemLength) {
-            difference.push({key: 'itemArray.length', receipt: receiptItemLength, expected: expectedItemLength})
-        } else {
-            receipt.itemArray.forEach((item, itemIdx) => {
-                const itemReadFromReceiptKeyArr = ["productName", "taxExemption", "discountArray", "unitPrice", "quantity", "amount"]
-                itemReadFromReceiptKeyArr.forEach((key) => {
-                    if (key === 'discountArray') {
-                        const receiptDiscountLength = item.readFromReceipt.discountArray.length
-                        const expectedDiscountLength = expected.itemArray[itemIdx].readFromReceipt.discountArray.length
-                        if (receiptDiscountLength !== expectedDiscountLength) {
-                            difference.push({key: `itemArray[${itemIdx}].discountArray.length`, receipt: receiptDiscountLength, expected: expectedDiscountLength})
-                        } else {
-                            item.readFromReceipt[key].forEach((discount, discountIdx) => {
-                                const discountReadFromReceiptKeyArr = ["name", "amount", "code"]
-                                discountReadFromReceiptKeyArr.forEach((key) => {
-                                    const receiptValue = discount[key]
-                                    const expectedValue = expected.itemArray[itemIdx].readFromReceipt.discountArray[discountIdx][key]
-                                    if (receiptValue !== undefined && expectedValue !== undefined) {
-                                        if (receiptValue !== expectedValue) {
-                                            difference.push({key: `itemArray[${itemIdx}].discountArray[${discountIdx}].${key}`, receipt: receiptValue, expected: expectedValue})
-                                        };
-                                    } else if (receiptValue === undefined && expectedValue !== undefined) {
-                                        difference.push({key: `itemArray[${itemIdx}].discountArray[${discountIdx}].${key}`, receipt: undefined, expected: expectedValue})
-                                    } else if (receiptValue !== undefined && expectedValue === undefined) {
-                                        difference.push({key: `itemArray[${itemIdx}].discountArray[${discountIdx}].${key}`, receipt: receiptValue, expected: undefined})
-                                    };
-                                });
-                            });
-                        };
-                    } else {
-                        const receiptValue = item.readFromReceipt[key]
-                        const expectedValue = expected.itemArray[itemIdx].readFromReceipt[key]
-                        if (receiptValue !== undefined && expectedValue !== undefined) {
-                            if (receiptValue !== expectedValue) {
-                                difference.push({key: `itemArray[${itemIdx}].${key}`, receipt: receiptValue, expected: expectedValue})
-                            };
-                        } else if (receiptValue === undefined && expectedValue !== undefined) {
-                            difference.push({key: `itemArray[${itemIdx}].${key}`, receipt: undefined, expected: expectedValue})
-                        } else if (receiptValue !== undefined && expectedValue === undefined) {
-                            difference.push({key: `itemArray[${itemIdx}].${key}`, receipt: receiptValue, expected: undefined})
-                        };
-                    };
-                });
-            });
-        };
-
-        // receiptReadFromReceipt 비교
-        const receiptReadFromReceiptKeyArr = ["date", "name", "tel", "address", "owner", "businessNumber", "taxProductAmount", "taxAmount", "taxExemptionProductAmount"]
-        receiptReadFromReceiptKeyArr.forEach((key) => {
-            let receiptValue = receipt.readFromReceipt[key]
-            let expectedValue = expected.readFromReceipt[key]
-            if (key === 'date') {
-                receiptValue = receiptValue.toString()
-                expectedValue = !expectedValue? new Date(undefined).toString() : new Date(expectedValue).toString()
-            }
-            if (receiptValue !== undefined && expectedValue !== undefined) {
-                if (receiptValue !== expectedValue) {
-                    if (!Number.isNaN(receiptValue)) {
-                        difference.push({key, receipt: receiptValue, expected: expectedValue})
-                    }
-                };
-            } else if (receiptValue === undefined && expectedValue !== undefined) {
-                difference.push({key, receipt: undefined, expected:expectedValue})
-            } else if (receiptValue !== undefined && expectedValue === undefined) {
-                difference.push({key, receipt: receiptValue, expected: undefined})
+        try {
+            const difference = []
+            // imageAddress 다르면 종료
+            if (receipt.imageAddress !== expected.imageAddress) {
+                difference.push({key: 'imageAddress', receipt: receipt.imageAddress, expected: expected.imageAddress})
+                return difference;
             };
-        });
 
-        return difference
+            // items 비교
+            const receiptItemLength = receipt.itemArray.length
+            const expectedItemLength = expected.itemArray.length
+            if (receiptItemLength !== expectedItemLength) {
+                difference.push({key: 'itemArray.length', receipt: receiptItemLength, expected: expectedItemLength})
+            } else {
+                receipt.itemArray.forEach((item, itemIdx) => {
+                    const itemReadFromReceiptKeyArr = ["productName", "taxExemption", "discountArray", "unitPrice", "quantity", "amount"]
+                    itemReadFromReceiptKeyArr.forEach((key) => {
+                        if (key === 'discountArray') {
+                            const receiptDiscountLength = item.readFromReceipt.discountArray.length
+                            const expectedDiscountLength = expected.itemArray[itemIdx].readFromReceipt.discountArray.length
+                            if (receiptDiscountLength !== expectedDiscountLength) {
+                                difference.push({key: `itemArray[${itemIdx}].discountArray.length`, receipt: receiptDiscountLength, expected: expectedDiscountLength})
+                            } else {
+                                item.readFromReceipt[key].forEach((discount, discountIdx) => {
+                                    const discountReadFromReceiptKeyArr = ["name", "amount", "code"]
+                                    discountReadFromReceiptKeyArr.forEach((key) => {
+                                        const receiptValue = discount[key]
+                                        const expectedValue = expected.itemArray[itemIdx].readFromReceipt.discountArray[discountIdx][key]
+                                        if (receiptValue !== undefined && expectedValue !== undefined) {
+                                            if (receiptValue !== expectedValue) {
+                                                difference.push({key: `itemArray[${itemIdx}].discountArray[${discountIdx}].${key}`, receipt: receiptValue, expected: expectedValue})
+                                            };
+                                        } else if (receiptValue === undefined && expectedValue !== undefined) {
+                                            difference.push({key: `itemArray[${itemIdx}].discountArray[${discountIdx}].${key}`, receipt: undefined, expected: expectedValue})
+                                        } else if (receiptValue !== undefined && expectedValue === undefined) {
+                                            difference.push({key: `itemArray[${itemIdx}].discountArray[${discountIdx}].${key}`, receipt: receiptValue, expected: undefined})
+                                        };
+                                    });
+                                });
+                            };
+                        } else {
+                            const receiptValue = item.readFromReceipt[key]
+                            const expectedValue = expected.itemArray[itemIdx].readFromReceipt[key]
+                            if (receiptValue !== undefined && expectedValue !== undefined) {
+                                if (receiptValue !== expectedValue) {
+                                    difference.push({key: `itemArray[${itemIdx}].${key}`, receipt: receiptValue, expected: expectedValue})
+                                };
+                            } else if (receiptValue === undefined && expectedValue !== undefined) {
+                                difference.push({key: `itemArray[${itemIdx}].${key}`, receipt: undefined, expected: expectedValue})
+                            } else if (receiptValue !== undefined && expectedValue === undefined) {
+                                difference.push({key: `itemArray[${itemIdx}].${key}`, receipt: receiptValue, expected: undefined})
+                            };
+                        };
+                    });
+                });
+            };
+
+            // receiptReadFromReceipt 비교
+            const receiptReadFromReceiptKeyArr = ["date", "name", "tel", "address", "owner", "businessNumber", "taxProductAmount", "taxAmount", "taxExemptionProductAmount"]
+            receiptReadFromReceiptKeyArr.forEach((key) => {
+                let receiptValue = receipt.readFromReceipt[key]
+                let expectedValue = expected.readFromReceipt[key]
+                if (key === 'date') {
+                    receiptValue = receiptValue.toString()
+                    expectedValue = !expectedValue? new Date(undefined).toString() : new Date(expectedValue).toString()
+                }
+                if (receiptValue !== undefined && expectedValue !== undefined) {
+                    if (receiptValue !== expectedValue) {
+                        if (!Number.isNaN(receiptValue)) {
+                            difference.push({key, receipt: receiptValue, expected: expectedValue})
+                        }
+                    };
+                } else if (receiptValue === undefined && expectedValue !== undefined) {
+                    difference.push({key, receipt: undefined, expected:expectedValue})
+                } else if (receiptValue !== undefined && expectedValue === undefined) {
+                    difference.push({key, receipt: receiptValue, expected: undefined})
+                };
+            });
+
+            return difference
+
+        } catch (error) {
+            console.log(error)
+            throw error
+        }
     };
 
     /**
